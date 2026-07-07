@@ -1,0 +1,12 @@
+// Prisma 7 schema. Connection URLs live in prisma.config.ts (CLI) and the
+// driver adapter (runtime), not here — see src/lib/prisma.ts.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+

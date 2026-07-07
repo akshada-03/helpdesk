@@ -6,3 +6,6 @@ build/
 *.log
 .DS_Store
 bun.lockb
+
+# Prisma-generated client (run `prisma generate` to recreate)
+server/src/generated/
