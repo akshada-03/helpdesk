@@ -12,12 +12,18 @@ datasource db {
 
 // --- Better Auth core models (email/password + database sessions) ---
 
+enum Role {
+  admin
+  agent
+}
+
 model User {
   id            String    @id
   name          String
   email         String    @unique
   emailVerified Boolean   @default(false)
   image         String?
+  role          Role      @default(agent)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   sessions      Session[]
