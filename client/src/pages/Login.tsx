@@ -39,6 +39,9 @@ export default function Login() {
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
+    // Validate a field once it's been blurred, then live as the user corrects
+    // it — so an invalid email shows its error without waiting for submit.
+    mode: "onTouched",
     defaultValues: { email: "", password: "" },
   });
 
