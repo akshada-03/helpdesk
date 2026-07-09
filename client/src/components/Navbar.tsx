@@ -1,6 +1,7 @@
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { LogOut } from "lucide-react";
 
+import { Role } from "core/constants/role.ts";
 import { signOut, useSession } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 
@@ -16,7 +17,17 @@ export default function Navbar() {
   return (
     <header className="border-b bg-white">
       <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4">
-        <span className="font-semibold">Helpdesk</span>
+        <div className="flex items-center gap-4">
+          <span className="font-semibold">Helpdesk</span>
+          {session?.user.role === Role.admin && (
+            <Link
+              to="/users"
+              className="text-muted-foreground hover:text-foreground text-sm"
+            >
+              Users
+            </Link>
+          )}
+        </div>
         <div className="flex items-center gap-3">
           {session && (
             <span className="text-muted-foreground text-sm">
