@@ -2,12 +2,13 @@ import express from "express";
 import cors from "cors";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth";
+import { CLIENT_URL } from "./lib/env";
 import { apiRouter } from "./routes";
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
 
-app.use(cors({ origin: process.env.CLIENT_URL ?? "http://localhost:3000", credentials: true }));
+app.use(cors({ origin: CLIENT_URL, credentials: true }));
 
 // Better Auth handles its own body parsing — mount BEFORE express.json().
 app.all("/api/auth/*", toNodeHandler(auth));

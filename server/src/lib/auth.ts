@@ -1,14 +1,30 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import prisma from "../db";
+import { CLIENT_URL, isProduction } from "./env";
 
 // baseURL and secret are read from BETTER_AUTH_URL / BETTER_AUTH_SECRET env vars.
 export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: "postgresql" }),
   // The client runs on a different origin than this API, so it must be trusted
-  // for cross-origin sign-in. Set via CLIENT_URL (see .env.example); mirrors the
-  // CORS origin in index.ts.
-  trustedOrigins: [process.env.CLIENT_URL!],
+  // for cross-origin sign-in. Uses the same validated CLIENT_URL as the CORS
+  // origin in index.ts (see lib/env.ts).
+  trustedOrigins: [CLIENT_URL],
+  // Throttle auth endpoints in ALL environments — do not rely on NODE_ENV
+  // gating for a security control. Sign-in is locked down harder to blunt
+  // password brute-forcing against the seeded account(s).
+  rateLimit: {
+    enabled: true,
+    window: 60, // seconds
+    max: 100,
+    customRules: {
+      "/sign-in/email": { window: 60, max: 5 },
+    },
+  },
+  // Force the Secure cookie attribute in production (served over HTTPS).
+  advanced: {
+    useSecureCookies: isProduction,
+  },
   emailAndPassword: {
     enabled: true, // email/password sign-in
     disableSignUp: true, // public sign-up disabled — users seeded/created elsewhere
