@@ -1,0 +1,3 @@
+# Enable Tailwind CSS processing in Bun's dev server / HTML bundler.
+[serve.static]
+plugins = ["bun-plugin-tailwind"]

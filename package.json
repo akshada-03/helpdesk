@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "workspaces": ["client", "server"],
+  "workspaces": ["core", "client", "server"],
   "scripts": {
     "dev": "bun run --filter '*' dev",
     "dev:client": "bun run --cwd client dev",
