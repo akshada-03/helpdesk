@@ -14,7 +14,7 @@ export default function Navbar() {
   }
 
   return (
-    <header className="bg-background border-b">
+    <header className="border-b bg-white">
       <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4">
         <span className="font-semibold">Helpdesk</span>
         <div className="flex items-center gap-3">

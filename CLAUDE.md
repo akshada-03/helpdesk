@@ -77,14 +77,19 @@ The client proxies `/api/*` requests to the server via Vite config (target is co
 
 ## Authentication
 
-- **Library**: Better Auth with Prisma adapter
-- **Server config**: `server/src/lib/auth.ts` — mounted at `/api/auth/{*any}` (must be before `express.json()`)
-- **Client config**: `client/src/lib/auth-client.ts` — exports `signIn`, `signOut`, `useSession`
+- **Library**: Better Auth with Prisma adapter (email/password, database-backed sessions)
+- **Server config**: `server/src/lib/auth.ts` — mounted at `/api/auth/{*any}` in `index.ts` (must be registered **before** `express.json()` so Better Auth does its own body parsing)
+- **Cross-origin**: the client (`:3000`) and API (`:3001`) are different origins, so auth requests are cross-origin. Both sides must be configured or sign-in fails:
+  - Server: `trustedOrigins: [process.env.CLIENT_URL]` in `auth.ts` **and** CORS `credentials: true` in `index.ts`. Without the trusted origin, `POST /api/auth/sign-in/email` returns `403 INVALID_ORIGIN`.
+  - Client: the auth client's `baseURL` points at the API (`http://localhost:3001`) with `fetchOptions: { credentials: "include" }`; the shared Axios instance (`client/src/lib/api.ts`) sets `withCredentials: true`.
+  - The `CLIENT_URL` env var (see `server/.env.example`) drives **both** the CORS origin and `trustedOrigins` — keep them in sync.
+- **Client config**: `client/src/lib/auth-client.ts` — `createAuthClient` exporting `signIn`, `signOut`, `useSession`. Registers the `inferAdditionalFields` plugin so `session.user.role` is typed.
+- **Login flow**: call `signIn.email({ email, password })`, then redirect to `/` on success. The session persists via an HttpOnly cookie; `useSession()` returns `{ data: session, isPending }` (render a spinner while `isPending`, treat `!session` as logged out).
 - **Middleware**: `server/src/middleware/require-auth.ts` — `requireAuth` guard that sets `req.user` and `req.session`
-- **Route protection (client)**: `ProtectedRoute` component wraps authenticated routes; redirects to `/login` if unauthenticated
-- **Admin route protection (client)**: `AdminRoute` component wraps admin-only routes; redirects non-admins to `/`
-- **Sign-up is disabled** — users are seeded via `prisma/seed.ts`
-- **User roles**: `admin` and `agent` (defined as Prisma enum, default `agent`)
+- **Route protection (client)**: `ProtectedRoute` wraps authenticated routes (via `useSession()`); redirects to `/login` if unauthenticated
+- **Admin route protection (client)**: `AdminRoute` wraps admin-only routes; checks `session.user.role === Role.admin` (shared `Role` constant from `core/constants/role.ts`) and redirects non-admins to `/`
+- **Sign-up is disabled** (`emailAndPassword.disableSignUp: true`) — users are seeded via `prisma/seed.ts` (admin credentials come from `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`)
+- **User roles**: `admin` and `agent` (Prisma enum, default `agent`; `input: false` on the Better Auth field so it can't be set via the API)
 - **Rate limiting**: Auth routes are rate-limited, but only enforced when `NODE_ENV=production`
 
 ## Testing
