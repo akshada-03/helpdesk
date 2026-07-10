@@ -98,11 +98,30 @@ The client proxies `/api/*` requests to the server via Vite config (target is co
 
 ### Component Tests
 
-- **Framework**: Vitest + React Testing Library
-- Run with `cd client && bun run test` (single run) or `bun run test:watch` (watch mode)
-- Place test files next to the component: `ComponentName.test.tsx`
-- Use `renderWithQuery` from `@/test/render` to wrap components that use TanStack React Query
-- Mock Axios with `vi.mock("axios")` and `vi.mocked(axios, { deep: true })`
+- **Framework**: Vitest + React Testing Library, running in a `jsdom` environment. Config lives in `client/vitest.config.ts`; `client/src/test/setup.ts` registers jest-dom matchers and runs `cleanup()` after each test.
+
+**Executing** (from `client/`):
+
+- `bun run test` — run the whole suite once (use this for CI / verifying a change).
+- `bun run test:watch` — terminal watch mode; re-runs affected tests on save.
+- `bun run test:ui` — Vitest browser UI (live dashboard, rendered DOM, module graph); use this while authoring tests.
+- Target a single file: `bun run test -- src/pages/Users.test.tsx`.
+
+**Writing**:
+
+- Place the test next to the component: `ComponentName.test.tsx`.
+- Wrap components that use TanStack React Query with `renderWithQuery` from `@/test/render` (it provides a fresh, retry-disabled `QueryClient` per render; the client factory itself is `createTestQueryClient` in `@/test/query-client`).
+- **Mocking the API**: the app calls a shared `api = axios.create(...)` instance (`@/lib/api`), so a bare `vi.mock("axios")` auto-mock won't work — `axios.create()` must return a controllable instance. Use a factory whose `create()` returns a single shared mock, then drive it via `vi.mocked(axios, { deep: true })`:
+  ```ts
+  vi.mock("axios", () => {
+    const instance = { get: vi.fn(), post: vi.fn(), /* ... */ };
+    return { default: Object.assign(instance, { create: vi.fn(() => instance), isAxiosError: vi.fn(() => false) }) };
+  });
+  const mockedAxios = vi.mocked(axios, { deep: true }); // mockedAxios.get.mockResolvedValue(...)
+  ```
+- **Stub child components that aren't under test** when they pull in the router or auth session (e.g. `vi.mock("@/components/Navbar", () => ({ default: () => null }))`) so the test stays focused and doesn't need a `<Router>`/session.
+- Use `findBy*` / `await` for async query states. When a loading skeleton mirrors the loaded layout (e.g. a skeleton table with the **same** column headers), wait on success-only content (a data value), not on shared structure — otherwise the assertion resolves against the still-loading skeleton.
+- **Scope**: rendering, component states (loading/empty/error), data display, error handling, and form-validation messages belong here — not full-stack flows (those are E2E).
 
 ### E2E Tests
 
