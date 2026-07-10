@@ -94,8 +94,7 @@ The client proxies `/api/*` requests to the server via Vite config (target is co
 
 ## Testing
 
-- **Prefer component tests** for the majority of coverage (rendering, states, data display, error handling). Reserve E2E tests for things that truly need a real browser + server
-- : navigation, auth redirects, and full-stack integration flows (e.g. webhook creates data that appears in the UI).
+- **Prefer component tests** for the majority of coverage (rendering, states, data display, error handling). Reserve E2E tests for things that truly need a real browser + server: navigation, auth redirects, and full-stack integration flows (e.g. webhook creates data that appears in the UI).
 
 ### Component Tests
 
@@ -107,9 +106,6 @@ The client proxies `/api/*` requests to the server via Vite config (target is co
 
 ### E2E Tests
 
-- **Framework**: Playwright
-- Use the `e2e-test-writer` agent for writing Playwright E2E tests
-- Run with `bun run test:e2e` from root
-- **Only use for things that truly require a real browser + server** — never duplicate what unit tests already cover
-- Valid E2E scenarios: auth redirects, cross-page navigation, data persistence after reload, full-stack integration flows (e.g. webhook creates data → UI displays it)
-- Invalid E2E scenarios: rendering, display logic, component states, API call verification, form validation, error messages — use component tests for these
+- **Framework**: Playwright, in the `/e2e` workspace (dedicated `helpdesk_test` database). Run with `npm run test:e2e` from the repo root.
+- **Always write E2E tests via the `e2e-test-writer` agent** — do not hand-write Playwright specs directly. Whenever a task calls for a new or updated E2E/Playwright test, delegate it to the `e2e-test-writer` agent (invoke it through the Agent tool).
+- The agent owns the full E2E guidance: test-database setup, run/debug commands, Playwright conventions, and which scenarios warrant an E2E test vs. a component test. Keep that detail in the agent, not here.
