@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "./middleware/require-auth";
+import { usersRouter } from "./routes/users";
 
 export const apiRouter = Router();
 
@@ -22,3 +23,7 @@ apiRouter.use(requireAuth);
 apiRouter.get("/me", (req, res) => {
   res.json({ user: req.user });
 });
+
+// Admin-only user management. The router applies requireRole(Role.admin) per
+// route on top of the requireAuth guard mounted above.
+apiRouter.use("/users", usersRouter);
