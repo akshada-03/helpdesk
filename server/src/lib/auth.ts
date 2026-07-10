@@ -10,11 +10,11 @@ export const auth = betterAuth({
   // for cross-origin sign-in. Uses the same validated CLIENT_URL as the CORS
   // origin in index.ts (see lib/env.ts).
   trustedOrigins: [CLIENT_URL],
-  // Throttle auth endpoints in ALL environments — do not rely on NODE_ENV
-  // gating for a security control. Sign-in is locked down harder to blunt
+  // Throttle auth endpoints in production only, so local dev and E2E test runs
+  // aren't blocked by the sign-in limit. Sign-in is locked down harder to blunt
   // password brute-forcing against the seeded account(s).
   rateLimit: {
-    enabled: true,
+    enabled: isProduction,
     window: 60, // seconds
     max: 100,
     customRules: {

@@ -9,3 +9,10 @@ bun.lockb
 
 # Prisma-generated client (run `prisma generate` to recreate)
 server/src/generated/
+
+# Playwright
+e2e/.env
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/

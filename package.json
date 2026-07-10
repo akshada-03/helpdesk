@@ -3,14 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "workspaces": ["core", "client", "server"],
+  "workspaces": ["core", "client", "server", "e2e"],
   "scripts": {
     "dev": "bun run --filter '*' dev",
     "dev:client": "bun run --cwd client dev",
     "dev:server": "bun run --cwd server dev",
     "build": "bun run --cwd client build",
     "start": "bun run --cwd server start",
-    "typecheck": "bun run --filter '*' typecheck"
+    "typecheck": "bun run --filter '*' typecheck",
+    "test:e2e": "npm run test --workspace e2e"
   },
   "devDependencies": {
     "@types/bun": "latest",
