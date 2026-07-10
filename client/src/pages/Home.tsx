@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type Health = { status: string; timestamp: string };
 
@@ -37,11 +38,7 @@ export default function Home() {
             <CardTitle>API status</CardTitle>
           </CardHeader>
           <CardContent>
-            {health.isPending && (
-              <span className="text-muted-foreground text-sm">
-                Checking API health…
-              </span>
-            )}
+            {health.isPending && <Skeleton className="h-5 w-72" />}
             {health.isError && (
               <ErrorAlert
                 error={health.error}
