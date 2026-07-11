@@ -80,3 +80,35 @@ model Verification {
   @@map("verification")
 }
 
+// --- Support tickets ---
+
+enum TicketStatus {
+  open
+  resolved
+  closed
+}
+
+enum TicketCategory {
+  general_question
+  technical_question
+  refund_request
+}
+
+// A support ticket. Created from an inbound email (see routes/webhooks.ts).
+// Requesters are external people (not app Users), so their identity is stored as
+// plain fields. Category is set later by AI classification (not yet built), so it
+// is nullable.
+model Ticket {
+  id             String          @id
+  subject        String
+  body           String
+  requesterEmail String
+  requesterName  String?
+  status         TicketStatus    @default(open)
+  category       TicketCategory?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@map("ticket")
+}
+

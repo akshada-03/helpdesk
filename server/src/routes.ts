@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { requireAuth } from "./middleware/require-auth";
 import { meRouter, usersRouter } from "./routes/users";
+import { ticketsRouter } from "./routes/tickets";
+import { webhooksRouter } from "./routes/webhooks";
 
 export const apiRouter = Router();
 
@@ -10,6 +12,10 @@ export const apiRouter = Router();
 apiRouter.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
+
+// Inbound email webhook (SendGrid Inbound Parse) — the email provider is
+// unauthenticated, so this must stay public. It does its own optional token check.
+apiRouter.use("/webhooks", webhooksRouter);
 
 // --- Authenticated routes ---
 // Everything registered BELOW this line requires a valid session. Because
@@ -23,3 +29,6 @@ apiRouter.use(requireAuth);
 // requireRole(Role.admin) per route on top of the requireAuth guard above).
 apiRouter.use("/me", meRouter);
 apiRouter.use("/users", usersRouter);
+
+// Ticket list (agents + admins). Created from inbound email via the webhook above.
+apiRouter.use("/tickets", ticketsRouter);
