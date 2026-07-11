@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 
+import { Role } from "core/constants/role.ts";
 import { createUserSchema, updateUserSchema } from "core/schemas/users.ts";
 import type { UserListItem } from "core/schemas/users.ts";
 import { api } from "@/lib/api";
@@ -24,21 +25,34 @@ import {
   FormItem,
   FormLabel,
 } from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import ErrorAlert from "@/components/ErrorAlert";
 import ErrorMessage from "@/components/ErrorMessage";
 
-// Create and update share the same three fields, so one value shape covers both
-// (the update schema's password is `"" | string`, which is still a string).
-type UserFormValues = { name: string; email: string; password: string };
+// Create and update share the same fields, so one value shape covers both. Role
+// starts empty (`""`) in create mode so the admin must actively pick one; the
+// schema rejects `""` as "Please select a role".
+type UserFormValues = {
+  name: string;
+  email: string;
+  password: string;
+  role: Role | "";
+};
 
 function emptyValues(): UserFormValues {
-  return { name: "", email: "", password: "" };
+  return { name: "", email: "", password: "", role: "" };
 }
 
 function valuesFor(user: UserListItem): UserFormValues {
   // Password starts blank in edit mode — filling it resets the password, leaving
-  // it blank keeps the current one.
-  return { name: user.name, email: user.email, password: "" };
+  // it blank keeps the current one. Role is pre-selected to the user's current role.
+  return { name: user.name, email: user.email, password: "", role: user.role };
 }
 
 type UserFormDialogProps = {
@@ -69,7 +83,11 @@ export default function UserFormDialog({
   };
 
   const form = useForm<UserFormValues>({
-    resolver: zodResolver(isEdit ? updateUserSchema : createUserSchema),
+    // The schema's role output is `"admin" | "agent"`, but the form field allows
+    // `""` (unselected) as input — cast to the field-values resolver shape.
+    resolver: zodResolver(
+      isEdit ? updateUserSchema : createUserSchema,
+    ) as Resolver<UserFormValues>,
     // Validate a field once it's been blurred, then live as the user corrects it.
     mode: "onTouched",
     defaultValues: user ? valuesFor(user) : emptyValues(),
@@ -105,7 +123,7 @@ export default function UserFormDialog({
           <DialogDescription>
             {isEdit
               ? "Update this user's details. Leave the password blank to keep it unchanged."
-              : "Create a user account. They'll be added as an agent."}
+              : "Create a user account and choose their role."}
           </DialogDescription>
         </DialogHeader>
 
@@ -144,6 +162,27 @@ export default function UserFormDialog({
                       {...noAutofill}
                     />
                   </FormControl>
+                  <ErrorMessage message={fieldState.error?.message} />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="role"
+              render={({ field, fieldState }) => (
+                <FormItem>
+                  <FormLabel>Role</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a role" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={Role.agent}>Agent</SelectItem>
+                      <SelectItem value={Role.admin}>Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <ErrorMessage message={fieldState.error?.message} />
                 </FormItem>
               )}

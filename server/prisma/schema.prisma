@@ -26,6 +26,10 @@ model User {
   role          Role      @default(agent)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  // Soft delete: non-null means the user has been deactivated. Such users are
+  // hidden from the admin list and blocked from signing in (see auth.ts), but
+  // their row and audit trail are preserved.
+  deletedAt     DateTime?
   sessions      Session[]
   accounts      Account[]
 

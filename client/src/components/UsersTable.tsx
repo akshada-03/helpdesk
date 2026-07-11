@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Pencil } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 
 import { Role } from "core/constants/role.ts";
 import type { UserListItem, UserListResponse } from "core/schemas/users.ts";
 import { api } from "@/lib/api";
 import ErrorAlert from "@/components/ErrorAlert";
 import UserFormDialog from "@/components/UserFormDialog";
+import DeleteUserDialog from "@/components/DeleteUserDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -43,6 +44,7 @@ function UsersTableHeader() {
 // refetches this table automatically after a create or edit.
 export default function UsersTable() {
   const [editingUser, setEditingUser] = useState<UserListItem | null>(null);
+  const [deletingUser, setDeletingUser] = useState<UserListItem | null>(null);
 
   const users = useQuery({
     queryKey: ["users"],
@@ -114,14 +116,27 @@ export default function UsersTable() {
                   {new Date(user.createdAt).toLocaleDateString()}
                 </TableCell>
                 <TableCell className="text-right">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Edit ${user.name}`}
-                    onClick={() => setEditingUser(user)}
-                  >
-                    <Pencil />
-                  </Button>
+                  <div className="flex justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Edit ${user.name}`}
+                      onClick={() => setEditingUser(user)}
+                    >
+                      <Pencil />
+                    </Button>
+                    {/* Admins can't be deleted, so they get no delete button. */}
+                    {user.role !== Role.admin && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Delete ${user.name}`}
+                        onClick={() => setDeletingUser(user)}
+                      >
+                        <Trash2 className="text-destructive" />
+                      </Button>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -138,6 +153,17 @@ export default function UsersTable() {
           open
           onOpenChange={(open) => {
             if (!open) setEditingUser(null);
+          }}
+        />
+      )}
+
+      {deletingUser && (
+        <DeleteUserDialog
+          key={deletingUser.id}
+          user={deletingUser}
+          open
+          onOpenChange={(open) => {
+            if (!open) setDeletingUser(null);
           }}
         />
       )}

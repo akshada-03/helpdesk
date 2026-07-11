@@ -25,6 +25,8 @@ export const usersRouter = Router();
 // never exposes anything auth-sensitive (credentials live on the Account model).
 usersRouter.get("/", requireRole(Role.admin), async (_req, res) => {
   const users = await prisma.user.findMany({
+    // Soft-deleted users are hidden from the admin list.
+    where: { deletedAt: null },
     select: {
       id: true,
       name: true,
@@ -48,8 +50,8 @@ usersRouter.get("/", requireRole(Role.admin), async (_req, res) => {
 // Admin-only user creation. Sign-up is disabled through Better Auth's API, so we
 // create the user the same way the seed script does: hash the password with
 // Better Auth's own hasher, then insert the User + a `credential` Account (which
-// holds the hash) atomically. Role is not accepted from the client — new users
-// are always created as `agent`.
+// holds the hash) atomically. The admin picks the role (validated to admin or
+// agent by createUserSchema).
 usersRouter.post("/", requireRole(Role.admin), async (req, res) => {
   const data = validate(createUserSchema, req.body, res);
   if (!data) return;
@@ -73,7 +75,7 @@ usersRouter.post("/", requireRole(Role.admin), async (req, res) => {
         id,
         email: data.email,
         name: data.name,
-        role: UserRole.agent,
+        role: data.role as UserRole,
         emailVerified: true,
         createdAt: now,
         updatedAt: now,
@@ -96,7 +98,7 @@ usersRouter.post("/", requireRole(Role.admin), async (req, res) => {
     id,
     name: data.name,
     email: data.email,
-    role: Role.agent,
+    role: data.role,
     emailVerified: true,
     createdAt: now.toISOString(),
   };
@@ -145,7 +147,12 @@ usersRouter.patch("/:id", requireRole(Role.admin), async (req, res) => {
   await prisma.$transaction(async (tx) => {
     await tx.user.update({
       where: { id },
-      data: { name: data.name, email: data.email, updatedAt: now },
+      data: {
+        name: data.name,
+        email: data.email,
+        role: data.role as UserRole,
+        updatedAt: now,
+      },
     });
     if (hashedPassword !== null) {
       await tx.account.updateMany({
@@ -159,9 +166,38 @@ usersRouter.patch("/:id", requireRole(Role.admin), async (req, res) => {
     id,
     name: data.name,
     email: data.email,
-    role: existing.role as Role,
+    role: data.role,
     emailVerified: existing.emailVerified,
     createdAt: existing.createdAt.toISOString(),
   };
   res.json({ user });
+});
+
+// Admin-only soft delete. The user row is preserved (deletedAt is stamped) but
+// hidden from the list and blocked from signing in (see the session hook in
+// lib/auth.ts). Admins can never be deleted. Any active sessions are revoked so
+// the user is logged out immediately.
+usersRouter.delete("/:id", requireRole(Role.admin), async (req, res) => {
+  const id = req.params.id as string;
+
+  const existing = await prisma.user.findUnique({ where: { id } });
+  if (!existing || existing.deletedAt) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+  if (existing.role === UserRole.admin) {
+    res.status(403).json({ error: "Admin users cannot be deleted" });
+    return;
+  }
+
+  const now = new Date();
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id },
+      data: { deletedAt: now, updatedAt: now },
+    });
+    await tx.session.deleteMany({ where: { userId: id } });
+  });
+
+  res.status(204).end();
 });

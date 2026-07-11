@@ -3,6 +3,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import axios, { type AxiosResponse } from "axios";
 
+import { Role } from "core/constants/role.ts";
 import type { UserListItem, UserListResponse } from "core/schemas/users.ts";
 import { renderWithQuery } from "@/test/render";
 import Users from "./Users";
@@ -50,7 +51,7 @@ const admin: UserListItem = {
   id: "u-admin",
   name: "Alice Admin",
   email: "alice@example.com",
-  role: "admin",
+  role: Role.admin,
   emailVerified: true,
   createdAt: "2026-01-15T10:00:00.000Z",
 };
@@ -59,7 +60,7 @@ const agent: UserListItem = {
   id: "u-agent",
   name: "Bob Agent",
   email: "bob@example.com",
-  role: "agent",
+  role: Role.agent,
   emailVerified: true,
   createdAt: "2026-02-20T10:00:00.000Z",
 };
@@ -111,7 +112,7 @@ describe("Users page", () => {
     // Admin row.
     const adminRow = screen.getByText("Alice Admin").closest("tr")!;
     expect(within(adminRow).getByText("alice@example.com")).toBeInTheDocument();
-    expect(within(adminRow).getByText("admin")).toBeInTheDocument();
+    expect(within(adminRow).getByText(Role.admin)).toBeInTheDocument();
     expect(
       within(adminRow).getByText(new Date(admin.createdAt).toLocaleDateString()),
     ).toBeInTheDocument();
@@ -119,7 +120,7 @@ describe("Users page", () => {
     // Agent row.
     const agentRow = screen.getByText("Bob Agent").closest("tr")!;
     expect(within(agentRow).getByText("bob@example.com")).toBeInTheDocument();
-    expect(within(agentRow).getByText("agent")).toBeInTheDocument();
+    expect(within(agentRow).getByText(Role.agent)).toBeInTheDocument();
 
     // Two data rows (plus the header row) => 3 total.
     expect(screen.getAllByRole("row")).toHaveLength(3);

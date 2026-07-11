@@ -35,6 +35,10 @@ test.describe("Create user", () => {
     await dialog.getByLabel("Name").fill(name);
     await dialog.getByLabel("Email").click();
     await dialog.getByLabel("Email").fill(email);
+    // Role is a required, click-to-open Select (no readonly lock). Its options
+    // render in a page-level portal, so query them via page (not the dialog).
+    await dialog.getByLabel("Role").click();
+    await page.getByRole("option", { name: "Agent" }).click();
     await dialog.getByLabel("Password").click();
     await dialog.getByLabel("Password").fill("supersecret123");
 
@@ -44,11 +48,51 @@ test.describe("Create user", () => {
     await expect(dialog).toBeHidden();
 
     // ...and the refreshed list shows the new user as a row (Name + Email cells,
-    // default role "agent"). Scope the assertion to that row so it's specific.
+    // role "agent"). Scope the assertion to that row so it's specific.
     const row = page.getByRole("row").filter({ hasText: email });
     await expect(row).toBeVisible();
     await expect(row.getByText(name)).toBeVisible();
     await expect(row.getByText("agent")).toBeVisible();
+  });
+
+  test("admin creates a user with the Admin role and the row shows it", async ({
+    page,
+  }) => {
+    await login(page, ADMIN);
+
+    await page.goto("/users");
+    await expect(page.getByRole("heading", { name: "Users" })).toBeVisible();
+
+    const suffix = Date.now();
+    const name = `Admin User ${suffix}`;
+    const email = `admin-user-${suffix}@example.com`;
+
+    await page.getByRole("button", { name: "New user" }).click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(
+      dialog.getByRole("heading", { name: "New user" })
+    ).toBeVisible();
+
+    await dialog.getByLabel("Name").click();
+    await dialog.getByLabel("Name").fill(name);
+    await dialog.getByLabel("Email").click();
+    await dialog.getByLabel("Email").fill(email);
+    // Pick the non-default "Admin" role and confirm it persists onto the row.
+    await dialog.getByLabel("Role").click();
+    await page.getByRole("option", { name: "Admin" }).click();
+    await dialog.getByLabel("Password").click();
+    await dialog.getByLabel("Password").fill("supersecret123");
+
+    await dialog.getByRole("button", { name: "Create user" }).click();
+    await expect(dialog).toBeHidden();
+
+    const row = page.getByRole("row").filter({ hasText: email });
+    await expect(row).toBeVisible();
+    await expect(row.getByText(name)).toBeVisible();
+    // exact match so the role badge isn't confused with the "admin"-containing
+    // name/email cells in the same row (getByText is substring by default).
+    await expect(row.getByText("admin", { exact: true })).toBeVisible();
   });
 
   test("client-side validation blocks an invalid submit and adds no row", async ({
@@ -78,6 +122,10 @@ test.describe("Create user", () => {
     await dialog.getByLabel("Name").fill("Blocked User");
     await dialog.getByLabel("Email").click();
     await dialog.getByLabel("Email").fill(`blocked-${Date.now()}@example.com`);
+    // Select a role so the password is the only failing field — isolates the
+    // assertion below to the password message.
+    await dialog.getByLabel("Role").click();
+    await page.getByRole("option", { name: "Agent" }).click();
     await dialog.getByLabel("Password").click();
     await dialog.getByLabel("Password").fill("short");
 

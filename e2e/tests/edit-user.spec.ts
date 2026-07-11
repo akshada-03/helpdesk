@@ -30,6 +30,11 @@ async function createUser(
   await dialog.getByLabel("Name").fill(name);
   await dialog.getByLabel("Email").click();
   await dialog.getByLabel("Email").fill(email);
+  // Role is now required. Default to "Agent" to preserve prior behavior (users
+  // were always created as agents). The Select is click-to-open (no readonly
+  // lock); its options render in a page-level portal, so query via page.
+  await dialog.getByLabel("Role").click();
+  await page.getByRole("option", { name: "Agent" }).click();
   await dialog.getByLabel("Password").click();
   await dialog.getByLabel("Password").fill(password);
 
@@ -81,6 +86,44 @@ test.describe("Edit user", () => {
     const updatedRow = page.getByRole("row").filter({ hasText: email });
     await expect(updatedRow.getByText(newName)).toBeVisible();
     await expect(updatedRow.getByText(originalName)).toBeHidden();
+  });
+
+  test("admin changes a user's role to Admin and the row's badge updates", async ({
+    page,
+  }) => {
+    await login(page, ADMIN);
+    await page.goto("/users");
+    await expect(page.getByRole("heading", { name: "Users" })).toBeVisible();
+
+    // Unique per run so re-runs don't collide on the server's 409 duplicate check.
+    const suffix = Date.now();
+    const name = `Role Change ${suffix}`;
+    const email = `edit-role-${suffix}@example.com`;
+
+    // Created as an agent by the helper.
+    const row = await createUser(page, name, email, "supersecret123");
+    await expect(row.getByText("agent")).toBeVisible();
+
+    await row.getByRole("button", { name: `Edit ${name}` }).click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(
+      dialog.getByRole("heading", { name: "Edit user" })
+    ).toBeVisible();
+
+    // The Role select is pre-populated with the user's current role ("Agent").
+    await expect(dialog.getByLabel("Role")).toHaveText("Agent");
+
+    // Change it to Admin. Options render in a page-level portal.
+    await dialog.getByLabel("Role").click();
+    await page.getByRole("option", { name: "Admin" }).click();
+
+    await dialog.getByRole("button", { name: "Save changes" }).click();
+    await expect(dialog).toBeHidden();
+
+    // The refetched list shows the promoted role on the (email-stable) row.
+    const updatedRow = page.getByRole("row").filter({ hasText: email });
+    await expect(updatedRow.getByText("admin")).toBeVisible();
   });
 
   test("admin changes a user's password and the new password works", async ({

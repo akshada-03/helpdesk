@@ -3,6 +3,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import axios, { type AxiosResponse } from "axios";
 
+import { Role } from "core/constants/role.ts";
 import { renderWithQuery } from "@/test/render";
 import CreateUserDialog from "./CreateUserDialog";
 
@@ -29,6 +30,16 @@ const mockedAxios = vi.mocked(axios, { deep: true });
 async function openDialog(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: /new user/i }));
   return screen.getByRole("dialog");
+}
+
+// Picks a role from the shadcn/radix Select (options render in a portal).
+async function selectRole(
+  user: ReturnType<typeof userEvent.setup>,
+  dialog: HTMLElement,
+  label: "Agent" | "Admin",
+) {
+  await user.click(within(dialog).getByRole("combobox"));
+  await user.click(await screen.findByRole("option", { name: label }));
 }
 
 describe("CreateUserDialog", () => {
@@ -99,6 +110,7 @@ describe("CreateUserDialog", () => {
     await user.type(within(dialog).getByLabelText("Name"), "Jane Doe");
     await user.type(within(dialog).getByLabelText("Email"), "jane@example.com");
     await user.type(within(dialog).getByLabelText("Password"), "supersecret");
+    await selectRole(user, dialog, "Agent");
     await user.click(within(dialog).getByRole("button", { name: /create user/i }));
 
     await waitFor(() => {
@@ -106,6 +118,7 @@ describe("CreateUserDialog", () => {
         name: "Jane Doe",
         email: "jane@example.com",
         password: "supersecret",
+        role: Role.agent,
       });
     });
 
@@ -128,6 +141,7 @@ describe("CreateUserDialog", () => {
     await user.type(within(dialog).getByLabelText("Name"), "Jane Doe");
     await user.type(within(dialog).getByLabelText("Email"), "jane@example.com");
     await user.type(within(dialog).getByLabelText("Password"), "supersecret");
+    await selectRole(user, dialog, "Agent");
     await user.click(within(dialog).getByRole("button", { name: /create user/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
@@ -165,6 +179,7 @@ describe("CreateUserDialog", () => {
     await user.type(within(dialog).getByLabelText("Name"), "  Jane Doe  ");
     await user.type(within(dialog).getByLabelText("Email"), "jane@example.com");
     await user.type(within(dialog).getByLabelText("Password"), "supersecret");
+    await selectRole(user, dialog, "Agent");
     await user.click(within(dialog).getByRole("button", { name: /create user/i }));
 
     await waitFor(() => {
@@ -172,6 +187,47 @@ describe("CreateUserDialog", () => {
         name: "Jane Doe",
         email: "jane@example.com",
         password: "supersecret",
+        role: Role.agent,
+      });
+    });
+  });
+
+  it("requires a role to be selected before submitting", async () => {
+    const user = userEvent.setup();
+    renderWithQuery(<CreateUserDialog />);
+    const dialog = await openDialog(user);
+
+    // Everything valid except the role, which starts unselected.
+    await user.type(within(dialog).getByLabelText("Name"), "Jane Doe");
+    await user.type(within(dialog).getByLabelText("Email"), "jane@example.com");
+    await user.type(within(dialog).getByLabelText("Password"), "supersecret");
+    await user.click(within(dialog).getByRole("button", { name: /create user/i }));
+
+    expect(await screen.findByText("Please select a role")).toBeInTheDocument();
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+  });
+
+  it("creates an admin when the admin role is selected", async () => {
+    mockedAxios.post.mockResolvedValue({
+      data: { user: {} },
+    } as AxiosResponse);
+
+    const user = userEvent.setup();
+    renderWithQuery(<CreateUserDialog />);
+    const dialog = await openDialog(user);
+
+    await user.type(within(dialog).getByLabelText("Name"), "Ada Admin");
+    await user.type(within(dialog).getByLabelText("Email"), "ada@example.com");
+    await user.type(within(dialog).getByLabelText("Password"), "supersecret");
+    await selectRole(user, dialog, "Admin");
+    await user.click(within(dialog).getByRole("button", { name: /create user/i }));
+
+    await waitFor(() => {
+      expect(mockedAxios.post).toHaveBeenCalledWith("/api/users", {
+        name: "Ada Admin",
+        email: "ada@example.com",
+        password: "supersecret",
+        role: Role.admin,
       });
     });
   });
@@ -187,6 +243,7 @@ describe("CreateUserDialog", () => {
     await user.type(within(dialog).getByLabelText("Name"), "Jane Doe");
     await user.type(within(dialog).getByLabelText("Email"), "jane@example.com");
     await user.type(within(dialog).getByLabelText("Password"), "supersecret");
+    await selectRole(user, dialog, "Agent");
 
     const submit = within(dialog).getByRole("button", { name: /create user/i });
     await user.click(submit);

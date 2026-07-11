@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import prisma from "../db";
 import { CLIENT_URL, isProduction } from "./env";
@@ -28,6 +29,27 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true, // email/password sign-in
     disableSignUp: true, // public sign-up disabled — users seeded/created elsewhere
+  },
+  databaseHooks: {
+    session: {
+      create: {
+        // Block soft-deleted (deactivated) users from establishing a session.
+        // This runs on sign-in and on any session (re)creation, so a deleted
+        // user can neither log in nor refresh an old session into a new one.
+        before: async (session) => {
+          const user = await prisma.user.findUnique({
+            where: { id: session.userId },
+            select: { deletedAt: true },
+          });
+          if (user?.deletedAt) {
+            throw new APIError("FORBIDDEN", {
+              message: "This account has been deactivated.",
+            });
+          }
+          return { data: session };
+        },
+      },
+    },
   },
   user: {
     additionalFields: {
