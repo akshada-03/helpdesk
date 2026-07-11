@@ -135,4 +135,62 @@ describe("CreateUserDialog", () => {
     );
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
+
+  it("rejects a malformed email with a format message", async () => {
+    const user = userEvent.setup();
+    renderWithQuery(<CreateUserDialog />);
+    const dialog = await openDialog(user);
+
+    // Name and password are valid, so only the email rule can fail here.
+    await user.type(within(dialog).getByLabelText("Name"), "Jane Doe");
+    await user.type(within(dialog).getByLabelText("Email"), "not-an-email");
+    await user.type(within(dialog).getByLabelText("Password"), "supersecret");
+    await user.click(within(dialog).getByRole("button", { name: /create user/i }));
+
+    expect(await screen.findByText("Enter a valid email")).toBeInTheDocument();
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+  });
+
+  it("trims surrounding whitespace before submitting", async () => {
+    mockedAxios.post.mockResolvedValue({
+      data: { user: {} },
+    } as AxiosResponse);
+
+    const user = userEvent.setup();
+    renderWithQuery(<CreateUserDialog />);
+    const dialog = await openDialog(user);
+
+    // The schema's .trim() runs as part of validation, so the mutation should
+    // receive the trimmed name — not the raw padded input.
+    await user.type(within(dialog).getByLabelText("Name"), "  Jane Doe  ");
+    await user.type(within(dialog).getByLabelText("Email"), "jane@example.com");
+    await user.type(within(dialog).getByLabelText("Password"), "supersecret");
+    await user.click(within(dialog).getByRole("button", { name: /create user/i }));
+
+    await waitFor(() => {
+      expect(mockedAxios.post).toHaveBeenCalledWith("/api/users", {
+        name: "Jane Doe",
+        email: "jane@example.com",
+        password: "supersecret",
+      });
+    });
+  });
+
+  it("disables the submit button while the create request is in flight", async () => {
+    // A promise that never settles keeps the mutation in its pending state.
+    mockedAxios.post.mockReturnValue(new Promise(() => {}));
+
+    const user = userEvent.setup();
+    renderWithQuery(<CreateUserDialog />);
+    const dialog = await openDialog(user);
+
+    await user.type(within(dialog).getByLabelText("Name"), "Jane Doe");
+    await user.type(within(dialog).getByLabelText("Email"), "jane@example.com");
+    await user.type(within(dialog).getByLabelText("Password"), "supersecret");
+
+    const submit = within(dialog).getByRole("button", { name: /create user/i });
+    await user.click(submit);
+
+    await waitFor(() => expect(submit).toBeDisabled());
+  });
 });

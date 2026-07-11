@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import axios, { type AxiosResponse } from "axios";
 
 import type { UserListItem, UserListResponse } from "core/schemas/users.ts";
@@ -147,5 +148,58 @@ describe("Users page", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Failed to load users.");
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+});
+
+describe("Users page — create-user dialog", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // The table isn't what we're testing here; settle it to the empty state so
+    // its query doesn't error out underneath the dialog assertions.
+    respondWith([]);
+  });
+
+  it("shows the dialog when the New user button is clicked", async () => {
+    const user = userEvent.setup();
+    renderWithQuery(<Users />);
+
+    // Closed on first render.
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /new user/i }));
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("hides the dialog when Escape is pressed", async () => {
+    const user = userEvent.setup();
+    renderWithQuery(<Users />);
+
+    await user.click(screen.getByRole("button", { name: /new user/i }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("hides the dialog when clicking outside it (the overlay)", async () => {
+    const user = userEvent.setup();
+    renderWithQuery(<Users />);
+
+    await user.click(screen.getByRole("button", { name: /new user/i }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+
+    // The overlay is the full-screen backdrop behind the dialog content;
+    // pressing down on it is "clicking outside" as far as Radix is concerned.
+    const overlay = document.querySelector('[data-slot="dialog-overlay"]');
+    expect(overlay).not.toBeNull();
+    await user.click(overlay as HTMLElement);
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
   });
 });
