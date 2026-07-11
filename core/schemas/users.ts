@@ -14,6 +14,21 @@ export const createUserSchema = z.object({
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 
+// Request body for PATCH /api/users/:id (admin edits a user). Name and email
+// follow the same rules as creation; role is intentionally not editable. The
+// password is optional — an empty string means "keep the current password",
+// otherwise it must meet the same length rule and resets the user's password.
+export const updateUserSchema = z.object({
+  name: z.string().trim().min(3, "Name must be at least 3 characters"),
+  email: z.string().min(1, "Email is required").email("Enter a valid email"),
+  password: z.union([
+    z.literal(""),
+    z.string().trim().min(8, "Password must be at least 8 characters"),
+  ]),
+});
+
+export type UpdateUserInput = z.infer<typeof updateUserSchema>;
+
 // Shape of a user as returned by GET /api/users (the admin-only user list).
 // Excludes auth-sensitive fields (passwords live on the Account model, never
 // the User model). `createdAt` is serialized to an ISO string over JSON.

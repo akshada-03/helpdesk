@@ -1,10 +1,14 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Pencil } from "lucide-react";
 
 import { Role } from "core/constants/role.ts";
-import type { UserListResponse } from "core/schemas/users.ts";
+import type { UserListItem, UserListResponse } from "core/schemas/users.ts";
 import { api } from "@/lib/api";
 import ErrorAlert from "@/components/ErrorAlert";
+import UserFormDialog from "@/components/UserFormDialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -16,7 +20,8 @@ import {
 } from "@/components/ui/table";
 
 // Shared column header — the loading skeleton and the loaded table use the same
-// columns, so keep them in one place to avoid drift.
+// columns, so keep them in one place to avoid drift. The trailing column holds
+// the per-row edit action (header label is visually hidden).
 function UsersTableHeader() {
   return (
     <TableHeader>
@@ -25,15 +30,20 @@ function UsersTableHeader() {
         <TableHead>Email</TableHead>
         <TableHead>Role</TableHead>
         <TableHead>Joined</TableHead>
+        <TableHead className="text-right">
+          <span className="sr-only">Actions</span>
+        </TableHead>
       </TableRow>
     </TableHeader>
   );
 }
 
 // The admin-only user list. Owns its own ["users"] query so the page stays a
-// thin layout; CreateUserDialog invalidates the same key, which refetches this
-// table automatically after a new user is created.
+// thin layout; CreateUserDialog / UserFormDialog invalidate the same key, which
+// refetches this table automatically after a create or edit.
 export default function UsersTable() {
+  const [editingUser, setEditingUser] = useState<UserListItem | null>(null);
+
   const users = useQuery({
     queryKey: ["users"],
     queryFn: async () =>
@@ -60,6 +70,9 @@ export default function UsersTable() {
                 <TableCell>
                   <Skeleton className="h-4 w-24" />
                 </TableCell>
+                <TableCell className="text-right">
+                  <Skeleton className="ml-auto h-8 w-8 rounded-md" />
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -79,30 +92,55 @@ export default function UsersTable() {
   }
 
   return (
-    <div className="rounded-md border">
-      <Table>
-        <UsersTableHeader />
-        <TableBody>
-          {users.data.map((user) => (
-            <TableRow key={user.id}>
-              <TableCell className="font-medium">{user.name}</TableCell>
-              <TableCell className="text-muted-foreground">
-                {user.email}
-              </TableCell>
-              <TableCell>
-                <Badge
-                  variant={user.role === Role.admin ? "default" : "secondary"}
-                >
-                  {user.role}
-                </Badge>
-              </TableCell>
-              <TableCell className="text-muted-foreground">
-                {new Date(user.createdAt).toLocaleDateString()}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <>
+      <div className="rounded-md border">
+        <Table>
+          <UsersTableHeader />
+          <TableBody>
+            {users.data.map((user) => (
+              <TableRow key={user.id}>
+                <TableCell className="font-medium">{user.name}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {user.email}
+                </TableCell>
+                <TableCell>
+                  <Badge
+                    variant={user.role === Role.admin ? "default" : "secondary"}
+                  >
+                    {user.role}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {new Date(user.createdAt).toLocaleDateString()}
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Edit ${user.name}`}
+                    onClick={() => setEditingUser(user)}
+                  >
+                    <Pencil />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Keyed + conditionally rendered so each edit opens a freshly populated
+          form and closing fully unmounts it (no stale/flashing content). */}
+      {editingUser && (
+        <UserFormDialog
+          key={editingUser.id}
+          user={editingUser}
+          open
+          onOpenChange={(open) => {
+            if (!open) setEditingUser(null);
+          }}
+        />
+      )}
+    </>
   );
 }

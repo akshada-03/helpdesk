@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { Role } from "core/constants/role.ts";
-import { createUserSchema } from "core/schemas/users.ts";
+import { createUserSchema, updateUserSchema } from "core/schemas/users.ts";
 import type { UserListItem, UserListResponse } from "core/schemas/users.ts";
 
 import prisma from "../db";
@@ -101,4 +101,67 @@ usersRouter.post("/", requireRole(Role.admin), async (req, res) => {
     createdAt: now.toISOString(),
   };
   res.status(201).json({ user });
+});
+
+// Admin-only user update. Name and email are always updated; role is never
+// editable. Password is optional — a non-empty value re-hashes and replaces the
+// hash on the user's `credential` Account (the same place the seed/create flow
+// stores it), while a blank value leaves the existing password untouched.
+usersRouter.patch("/:id", requireRole(Role.admin), async (req, res) => {
+  const data = validate(updateUserSchema, req.body, res);
+  if (!data) return;
+
+  // A plain ":id" segment is always a single value; @types/express widens it to
+  // string | string[], so narrow it here.
+  const id = req.params.id as string;
+  const existing = await prisma.user.findUnique({ where: { id } });
+  if (!existing) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  // Only guard uniqueness when the email actually changes, and allow the user to
+  // keep their own address (the conflict must belong to a *different* user).
+  if (data.email !== existing.email) {
+    const emailOwner = await prisma.user.findUnique({
+      where: { email: data.email },
+    });
+    if (emailOwner && emailOwner.id !== id) {
+      res.status(409).json({ error: "A user with this email already exists" });
+      return;
+    }
+  }
+
+  const now = new Date();
+
+  // Hash outside the transaction so bcrypt work doesn't hold it open. Null means
+  // "no password change".
+  let hashedPassword: string | null = null;
+  if (data.password !== "") {
+    const ctx = await auth.$context;
+    hashedPassword = await ctx.password.hash(data.password);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id },
+      data: { name: data.name, email: data.email, updatedAt: now },
+    });
+    if (hashedPassword !== null) {
+      await tx.account.updateMany({
+        where: { userId: id, providerId: "credential" },
+        data: { password: hashedPassword, updatedAt: now },
+      });
+    }
+  });
+
+  const user: UserListItem = {
+    id,
+    name: data.name,
+    email: data.email,
+    role: existing.role as Role,
+    emailVerified: existing.emailVerified,
+    createdAt: existing.createdAt.toISOString(),
+  };
+  res.json({ user });
 });
