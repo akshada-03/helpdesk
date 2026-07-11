@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "./middleware/require-auth";
-import { usersRouter } from "./routes/users";
+import { meRouter, usersRouter } from "./routes/users";
 
 export const apiRouter = Router();
 
@@ -18,12 +18,8 @@ apiRouter.get("/health", (_req, res) => {
 // admin-only actions, add requireRole(Role.admin) after requireAuth on the route.
 apiRouter.use(requireAuth);
 
-// Returns the currently authenticated user (handy for the client to confirm the
-// session and read the role). requireAuth guarantees req.user is set here.
-apiRouter.get("/me", (req, res) => {
-  res.json({ user: req.user });
-});
-
-// Admin-only user management. The router applies requireRole(Role.admin) per
-// route on top of the requireAuth guard mounted above.
+// User endpoints (both live in routes/users.ts). /me returns the currently
+// authenticated user; /users is admin-only management (the router applies
+// requireRole(Role.admin) per route on top of the requireAuth guard above).
+apiRouter.use("/me", meRouter);
 apiRouter.use("/users", usersRouter);

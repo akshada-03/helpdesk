@@ -11,7 +11,8 @@ const PORT = Number(process.env.PORT ?? 3001);
 app.use(cors({ origin: CLIENT_URL, credentials: true }));
 
 // Better Auth handles its own body parsing — mount BEFORE express.json().
-app.all("/api/auth/*", toNodeHandler(auth));
+// Express 5 requires named wildcards (bare "*" is no longer valid).
+app.all("/api/auth/{*any}", toNodeHandler(auth));
 
 app.use(express.json());
 

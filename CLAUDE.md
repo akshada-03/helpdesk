@@ -7,7 +7,7 @@ A ticket management system that uses AI to classify, respond to, and route suppo
 ## Tech Stack
 
 - **Frontend**: React + TypeScript + Vite (port 5173) + shadcn/ui
-- **Backend**: Express + TypeScript + Bun (port 3000)
+- **Backend**: Express 5 + TypeScript + Bun (port 3000)
 - **Database**: PostgreSQL with Prisma ORM
 - **AI**: OpenAI GPT-5 Nano via Vercel AI SDK (`@ai-sdk/openai`)
 - **Auth**: Better Auth (email/password, database sessions)
@@ -44,13 +44,14 @@ The client proxies `/api/*` requests to the server via Vite config (target is co
 - Use shadcn's semantic color tokens (e.g. `bg-background`, `text-muted-foreground`, `text-destructive`) instead of hardcoded Tailwind colors
 - Organize server endpoints into Express `Router` modules under `server/src/routes/` (e.g. `routes/users.ts`), mounted in `index.ts`
 - Define shared Zod schemas in the `core` package under `core/schemas/` (e.g. `core/schemas/users.ts`) and import them in both client and server (e.g. `import { createUserSchema } from "core/schemas/users"`)
-- Use Zod for validation (import from `zod/v4`)
+- Use Zod for all data validation — request bodies, form inputs, and any external or untrusted data. Do not hand-roll ad-hoc validation (manual `typeof`/`if` checks, regex-only guards). Import from `zod/v4`; `zod` is a dependency of the `client`, `core`, and `server` packages. Define the schema once (shared schemas live in `core/schemas/`, see above) and reuse it on both the client (via `zodResolver`) and the server (via the `validate` helper).
 - Validate request bodies in route handlers using the shared `validate` helper (`import { validate } from "../lib/validate"`). It takes a Zod schema, the request body, and the `res` object — returns parsed data or `null` (after sending a 400 response).
 - Parse and validate numeric ID route params with the shared `parseId` helper (`import { parseId } from "../lib/parse-id"`). Returns a positive integer or `null` for invalid values.
-- Do not wrap async route handlers in try/catch — Express 5 automatically catches rejected promises
+- Do not wrap async route handlers in try/catch — the project runs Express 5, which automatically forwards rejected promises from async handlers to the error middleware. Just `await` and let it throw (e.g. `POST /api/users` in `routes/users.ts` has no try/catch). Note this is an Express **5** behavior only; it does not work on Express 4.
+- Route paths use the Express 5 (path-to-regexp v8) matcher: wildcards must be **named** — use `/api/auth/{*any}` (or `*splat`), never a bare `*` (which throws at boot)
 - Use the shared `Role` constant instead of hardcoded `"admin"` / `"agent"` strings (import from `core/constants/role.ts`, e.g. `import { Role } from "core/constants/role.ts"`)
 - Define shared constants and domain types in `core/constants/` as union types (not `enum` — the client has `erasableSyntaxOnly` enabled). Use `as const` objects when runtime access is needed (e.g. `Role`), and plain union types when only type checking is needed (e.g. `type TicketStatus = "open" | "resolved" | "closed"`).
-- Use React Hook Form with Zod resolver for client-side form validation (`useForm` + `zodResolver` from `@hookform/resolvers/zod`)
+- Use React Hook Form with Zod resolver for client-side form validation (`useForm` + `zodResolver` from `@hookform/resolvers/zod`). Adding a new user is the reference implementation: `CreateUserDialog` (`client/src/components/CreateUserDialog.tsx`) wires `useForm` + `zodResolver(createUserSchema)` (the shared schema from `core/schemas/users.ts`) to a shadcn `Dialog`/`Form`, submits via a TanStack `useMutation` that POSTs `/api/users`, and the server re-validates the same schema with the `validate` helper. Model new create/edit forms on it.
 - Use Axios for HTTP requests (not `fetch`)
 - Use TanStack React Query (`useQuery`, `useMutation`) for server state management (not `useEffect` + `useState`)
 - Use the `ErrorAlert` component for error messages (`import ErrorAlert from "@/components/ErrorAlert"`). For static messages: `<ErrorAlert message="Failed to load data" />`. For mutation/query errors with automatic Axios message extraction: `<ErrorAlert error={mutation.error} fallback="Failed to save" />`.
