@@ -3,6 +3,7 @@ import multer from "multer";
 import { z } from "zod/v4";
 
 import prisma from "../db";
+import { WEBHOOK_SECRET } from "../lib/env";
 import { validate } from "../lib/validate";
 
 export const webhooksRouter = Router();
@@ -47,11 +48,10 @@ function htmlToText(html: string): string {
 }
 
 // Inbound email → ticket. This endpoint is public (mounted above requireAuth) so
-// the email provider can reach it. When INBOUND_EMAIL_TOKEN is set, a matching
+// the email provider can reach it. When WEBHOOK_SECRET is set, a matching
 // `?token=` is required — keep it unset in dev/E2E so local posts/tests work.
 webhooksRouter.post("/inbound-email", upload.none(), async (req, res) => {
-  const expectedToken = process.env.INBOUND_EMAIL_TOKEN;
-  if (expectedToken && req.query.token !== expectedToken) {
+  if (WEBHOOK_SECRET && req.query.token !== WEBHOOK_SECRET) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
