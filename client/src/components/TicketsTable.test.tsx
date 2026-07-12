@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { screen, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import axios, { type AxiosResponse } from "axios";
 
 import type { TicketListItem, TicketListResponse } from "core/schemas/tickets.ts";
@@ -75,12 +75,37 @@ describe("TicketsTable", () => {
     expect(screen.getByRole("table")).toBeInTheDocument();
   });
 
-  it("hits the tickets endpoint", async () => {
+  it("hits the tickets endpoint, defaulting to newest first", async () => {
     respondWith([newer]);
     renderWithQuery(<TicketsTable />);
 
     await screen.findByText("Cannot log in");
-    expect(mockedAxios.get).toHaveBeenCalledWith("/api/tickets");
+    expect(mockedAxios.get).toHaveBeenCalledWith("/api/tickets", {
+      params: { sortBy: "createdAt", order: "desc" },
+    });
+  });
+
+  it("sorts on the server when a column header is clicked", async () => {
+    respondWith([newer, older]);
+    renderWithQuery(<TicketsTable />);
+
+    await screen.findByText("Cannot log in");
+
+    // First click sorts by that column ascending.
+    fireEvent.click(screen.getByRole("button", { name: "Subject" }));
+    await waitFor(() =>
+      expect(mockedAxios.get).toHaveBeenLastCalledWith("/api/tickets", {
+        params: { sortBy: "subject", order: "asc" },
+      }),
+    );
+
+    // Clicking the same column again toggles to descending.
+    fireEvent.click(screen.getByRole("button", { name: "Subject" }));
+    await waitFor(() =>
+      expect(mockedAxios.get).toHaveBeenLastCalledWith("/api/tickets", {
+        params: { sortBy: "subject", order: "desc" },
+      }),
+    );
   });
 
   it("renders a row per ticket with subject, requester, status, and category", async () => {
@@ -90,7 +115,7 @@ describe("TicketsTable", () => {
     // Wait on a data value (loading skeleton shares the same headers).
     expect(await screen.findByText("Cannot log in")).toBeInTheDocument();
 
-    for (const header of ["Subject", "Requester", "Status", "Category", "Created"]) {
+    for (const header of ["Subject", "Sender", "Status", "Category", "Created"]) {
       expect(
         screen.getByRole("columnheader", { name: header }),
       ).toBeInTheDocument();
