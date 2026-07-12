@@ -4,6 +4,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import AdminRoute from "@/components/AdminRoute";
 import Login from "@/pages/Login";
 import Home from "@/pages/Home";
+import Tickets from "@/pages/Tickets";
 import Users from "@/pages/Users";
 
 export function App() {
@@ -13,6 +14,7 @@ export function App() {
 
       <Route element={<ProtectedRoute />}>
         <Route path="/" element={<Home />} />
+        <Route path="/tickets" element={<Tickets />} />
       </Route>
 
       <Route element={<AdminRoute />}>
