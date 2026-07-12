@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import type { TicketCategory, TicketStatus } from "core/constants/ticket.ts";
+import {type TicketStatus, type TicketCategory } from "core/constants/ticket.ts";
 import type { TicketListResponse } from "core/schemas/tickets.ts";
 import { api } from "@/lib/api";
 import ErrorAlert from "@/components/ErrorAlert";

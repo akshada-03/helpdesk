@@ -4,7 +4,6 @@
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
     "types": ["bun", "react", "react-dom"],
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     }
