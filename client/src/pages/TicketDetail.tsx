@@ -3,14 +3,19 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 
 import { Role } from "core/constants/role.ts";
-import type { TicketStatus, TicketCategory } from "core/constants/ticket.ts";
+import {
+  ticketStatuses,
+  ticketCategories,
+  type TicketStatus,
+  type TicketCategory,
+} from "core/constants/ticket.ts";
 import type { TicketDetail as TicketDetailData } from "core/schemas/tickets.ts";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/auth-client";
 import Navbar from "@/components/Navbar";
 import AssigneeSelect from "@/components/AssigneeSelect";
+import TicketFieldSelect from "@/components/TicketFieldSelect";
 import ErrorAlert from "@/components/ErrorAlert";
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -19,24 +24,19 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
-// Badge styling per status (mirrors TicketsTable).
-const statusVariant: Record<TicketStatus, "default" | "secondary" | "outline"> =
-  {
-    open: "default",
-    resolved: "secondary",
-    closed: "outline",
-  };
+// Display labels for each status/category. Explicit maps (rather than deriving
+// the label from the value) so the wording is fully under our control.
+const statusLabels: Record<TicketStatus, string> = {
+  open: "Open",
+  resolved: "Resolved",
+  closed: "Closed",
+};
 
-// "open" → "Open".
-function capitalize(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-// "general_question" → "General question"; null → "—".
-function formatCategory(category: TicketCategory | null): string {
-  if (!category) return "—";
-  return capitalize(category.replace(/_/g, " "));
-}
+const categoryLabels: Record<TicketCategory, string> = {
+  general_question: "General Question",
+  technical_question: "Technical Question",
+  refund_request: "Refund Request",
+};
 
 // A single labelled field in the metadata grid.
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -81,52 +81,90 @@ export default function TicketDetail() {
         <CardHeader>
           <CardTitle className="text-xl">{t.subject}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-            <Field label="Status">
-              <Badge variant={statusVariant[t.status]}>{t.status}</Badge>
-            </Field>
-            <Field label="Category">{formatCategory(t.category)}</Field>
-            <Field label="Created">
-              {new Date(t.createdAt).toLocaleString()}
-            </Field>
-            <Field label="Updated">
-              {new Date(t.updatedAt).toLocaleString()}
-            </Field>
-          </dl>
+        <CardContent>
+          {/* Two equal columns: the inbound message on the left, all the
+              editable attribute dropdowns (plus timestamps) on the right. */}
+          <div className="grid gap-8 md:grid-cols-2">
+            {/* Left — the message */}
+            <div className="space-y-1">
+              <h2 className="text-muted-foreground text-xs font-medium">
+                Message
+              </h2>
+              {/* Who the inbound message is from — name (falling back to email)
+                  plus the email address when a name is present. */}
+              <p className="text-muted-foreground text-xs">
+                From{" "}
+                <span className="text-foreground">
+                  {t.requesterName ?? t.requesterEmail}
+                </span>
+                {t.requesterName && (
+                  <>
+                    {" "}
+                    <span>{t.requesterEmail}</span>
+                  </>
+                )}
+              </p>
+              <p className="text-sm whitespace-pre-wrap">{t.body}</p>
+            </div>
 
-          <div className="space-y-1">
-            <h2 className="text-muted-foreground text-xs font-medium">
-              Assigned to
-            </h2>
-            {isAdmin ? (
-              <AssigneeSelect ticketId={t.id} assignee={t.assignee} />
-            ) : t.assignee ? (
-              <p className="text-sm">{t.assignee.name}</p>
-            ) : (
-              <p className="text-muted-foreground text-sm">Unassigned</p>
-            )}
-          </div>
+            {/* Right — editable attributes. Status and category are open to any
+                agent; assignment is admin-only (read-only for agents). */}
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-muted-foreground text-xs font-medium">
+                  Status
+                </label>
+                <TicketFieldSelect
+                  ticketId={t.id}
+                  value={t.status}
+                  ariaLabel="Update status"
+                  options={ticketStatuses.map((s) => ({
+                    value: s,
+                    label: statusLabels[s],
+                  }))}
+                  buildPatch={(v) => ({ status: v as TicketStatus })}
+                />
+              </div>
 
-          <div className="space-y-1">
-            <h2 className="text-muted-foreground text-xs font-medium">
-              Message
-            </h2>
-            {/* Who the inbound message is from — name (falling back to email)
-                plus the email address when a name is present. */}
-            <p className="text-muted-foreground text-xs">
-              From{" "}
-              <span className="text-foreground">
-                {t.requesterName ?? t.requesterEmail}
-              </span>
-              {t.requesterName && (
-                <>
-                  {" "}
-                  <span>{t.requesterEmail}</span>
-                </>
-              )}
-            </p>
-            <p className="text-sm whitespace-pre-wrap">{t.body}</p>
+              <div className="space-y-1.5">
+                <label className="text-muted-foreground text-xs font-medium">
+                  Category
+                </label>
+                <TicketFieldSelect
+                  ticketId={t.id}
+                  value={t.category ?? ""}
+                  ariaLabel="Update category"
+                  placeholder="Uncategorized"
+                  options={ticketCategories.map((c) => ({
+                    value: c,
+                    label: categoryLabels[c],
+                  }))}
+                  buildPatch={(v) => ({ category: v as TicketCategory })}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-muted-foreground text-xs font-medium">
+                  Assigned to
+                </label>
+                {isAdmin ? (
+                  <AssigneeSelect ticketId={t.id} assignee={t.assignee} />
+                ) : t.assignee ? (
+                  <p className="text-sm">{t.assignee.name}</p>
+                ) : (
+                  <p className="text-muted-foreground text-sm">Unassigned</p>
+                )}
+              </div>
+
+              <dl className="grid grid-cols-2 gap-4">
+                <Field label="Created">
+                  {new Date(t.createdAt).toLocaleString()}
+                </Field>
+                <Field label="Updated">
+                  {new Date(t.updatedAt).toLocaleString()}
+                </Field>
+              </dl>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -136,7 +174,7 @@ export default function TicketDetail() {
   return (
     <div className="min-h-svh">
       <Navbar />
-      <main className="mx-auto max-w-3xl px-4 py-8">
+      <main className="mx-auto max-w-4xl px-4 py-8">
         <Link
           to="/tickets"
           className="text-muted-foreground hover:text-foreground mb-6 inline-flex items-center gap-1 text-sm"

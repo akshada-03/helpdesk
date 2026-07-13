@@ -92,10 +92,20 @@ export type TicketDetail = {
   assignee: TicketAssignee | null;
 };
 
-// Request body for PATCH /api/tickets/:id — assign the ticket to an agent, or
-// clear the assignment with null. The id is validated for existence/eligibility
-// on the server (a plain string here); shared so the client sends the same shape.
-export const assignTicketSchema = z.object({
-  assigneeId: z.string().min(1).nullable(),
-});
-export type AssignTicketInput = z.infer<typeof assignTicketSchema>;
+// Request body for PATCH /api/tickets/:id — a partial update of any subset of the
+// agent-editable fields. Every field is optional, so a caller sends only what it
+// changes (e.g. just `{ status }` or just `{ assigneeId }`). `category` may be set
+// to null (uncategorized); `assigneeId` may be null (unassigned) and, when a
+// string, is validated for existence/eligibility on the server. At least one
+// field must be present. Assignment is admin-only — enforced in the route, not
+// here, since this schema is shared with the client.
+export const updateTicketSchema = z
+  .object({
+    status: z.enum(ticketStatuses).optional(),
+    category: z.enum(ticketCategories).nullable().optional(),
+    assigneeId: z.string().min(1).nullable().optional(),
+  })
+  .refine((body) => Object.values(body).some((v) => v !== undefined), {
+    message: "No fields to update",
+  });
+export type UpdateTicketInput = z.infer<typeof updateTicketSchema>;

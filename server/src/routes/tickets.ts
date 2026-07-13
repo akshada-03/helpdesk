@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { Role } from "core/constants/role.ts";
 import {
-  assignTicketSchema,
+  updateTicketSchema,
   ticketListQuerySchema,
   type TicketDetail,
   type TicketListItem,
@@ -12,7 +12,6 @@ import {
 import prisma from "../db";
 import type { Prisma } from "../generated/prisma/client";
 import { validate } from "../lib/validate";
-import { requireRole } from "../middleware/require-role";
 
 export const ticketsRouter = Router();
 
@@ -150,19 +149,26 @@ ticketsRouter.get("/:id", async (req, res) => {
   res.json(toTicketDetail(ticket));
 });
 
-// Assign the ticket to an agent (or clear the assignment with assigneeId: null).
-// Admin-only (requireRole on top of the parent apiRouter's requireAuth) — only
-// admins route tickets. A non-null assigneeId must reference an active
+// Partial update of an agent-editable ticket: status, category, and/or assignee.
+// Available to any authenticated user (the parent apiRouter applies requireAuth)
+// so agents can work their tickets — EXCEPT assignment, which stays admin-only
+// via a field-level check below. A non-null assigneeId must reference an active
 // (non-deleted) user; anything else is a 400 so we never point a ticket at a
 // missing/disabled account. Returns the updated ticket in the same shape as
 // GET /:id.
-ticketsRouter.patch("/:id", requireRole(Role.admin), async (req, res) => {
-  const data = validate(assignTicketSchema, req.body, res);
+ticketsRouter.patch("/:id", async (req, res) => {
+  const data = validate(updateTicketSchema, req.body, res);
   if (!data) return;
 
-  // A plain ":id" segment is always a single value; the requireRole handler
-  // signature widens it to string | string[], so narrow it here (as users.ts).
-  const id = req.params.id as string;
+  const { id } = req.params;
+
+  // Assignment is admin-only: reject a non-admin that tries to (re)assign, even
+  // though status/category edits are open to agents.
+  const changingAssignee = data.assigneeId !== undefined;
+  if (changingAssignee && req.user?.role !== Role.admin) {
+    res.status(403).json({ error: "Only admins can assign tickets" });
+    return;
+  }
 
   const existing = await prisma.ticket.findUnique({
     where: { id },
@@ -173,7 +179,8 @@ ticketsRouter.patch("/:id", requireRole(Role.admin), async (req, res) => {
     return;
   }
 
-  if (data.assigneeId !== null) {
+  // Validate a concrete assignee (null clears the assignment and needs no check).
+  if (data.assigneeId != null) {
     const agent = await prisma.user.findFirst({
       where: { id: data.assigneeId, deletedAt: null },
       select: { id: true },
@@ -184,9 +191,15 @@ ticketsRouter.patch("/:id", requireRole(Role.admin), async (req, res) => {
     }
   }
 
+  // Only write the fields that were actually provided, so an omitted field is
+  // left unchanged (rather than nulled).
   const ticket = await prisma.ticket.update({
     where: { id },
-    data: { assigneeId: data.assigneeId },
+    data: {
+      ...(data.status !== undefined ? { status: data.status } : {}),
+      ...(data.category !== undefined ? { category: data.category } : {}),
+      ...(changingAssignee ? { assigneeId: data.assigneeId } : {}),
+    },
     select: detailSelect,
   });
 

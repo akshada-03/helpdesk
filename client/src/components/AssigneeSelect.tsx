@@ -65,7 +65,7 @@ export default function AssigneeSelect({
         }
         disabled={agents.isPending || assign.isPending}
       >
-        <SelectTrigger className="w-64" aria-label="Assign to agent">
+        <SelectTrigger className="w-full" aria-label="Assign to agent">
           <SelectValue placeholder="Unassigned" />
         </SelectTrigger>
         <SelectContent>

@@ -3,7 +3,7 @@ import type { AddressInfo } from "node:net";
 import express, { type Express } from "express";
 
 import { Role } from "core/constants/role.ts";
-import { assignTicketSchema } from "core/schemas/tickets.ts";
+import { updateTicketSchema } from "core/schemas/tickets.ts";
 
 // Mock the Prisma client (the router's only DB dependency) BEFORE importing the
 // router, so importing it never touches the real database. The type-only
@@ -79,32 +79,64 @@ beforeEach(() => {
   prismaMock.user.findFirst.mockReset();
 });
 
-describe("assignTicketSchema", () => {
-  test("accepts a non-empty assignee id", () => {
-    const result = assignTicketSchema.safeParse({ assigneeId: "u-1" });
-    expect(result.success).toBe(true);
+describe("updateTicketSchema", () => {
+  test("accepts a status-only update", () => {
+    expect(updateTicketSchema.safeParse({ status: "resolved" }).success).toBe(
+      true,
+    );
   });
 
-  test("accepts null (the unassign case)", () => {
-    const result = assignTicketSchema.safeParse({ assigneeId: null });
-    expect(result.success).toBe(true);
+  test("accepts a category-only update, including null", () => {
+    expect(
+      updateTicketSchema.safeParse({ category: "refund_request" }).success,
+    ).toBe(true);
+    expect(updateTicketSchema.safeParse({ category: null }).success).toBe(true);
   });
 
-  test("rejects an empty-string id", () => {
-    expect(assignTicketSchema.safeParse({ assigneeId: "" }).success).toBe(false);
+  test("accepts an assignee id or null", () => {
+    expect(updateTicketSchema.safeParse({ assigneeId: "u-1" }).success).toBe(
+      true,
+    );
+    expect(updateTicketSchema.safeParse({ assigneeId: null }).success).toBe(
+      true,
+    );
   });
 
-  test("rejects a missing assigneeId field", () => {
-    expect(assignTicketSchema.safeParse({}).success).toBe(false);
+  test("rejects an empty body (nothing to update)", () => {
+    expect(updateTicketSchema.safeParse({}).success).toBe(false);
   });
 
-  test("rejects a non-string, non-null id", () => {
-    expect(assignTicketSchema.safeParse({ assigneeId: 42 }).success).toBe(false);
+  test("rejects unknown enum values and an empty assignee id", () => {
+    expect(updateTicketSchema.safeParse({ status: "nope" }).success).toBe(false);
+    expect(updateTicketSchema.safeParse({ category: "nope" }).success).toBe(
+      false,
+    );
+    expect(updateTicketSchema.safeParse({ assigneeId: "" }).success).toBe(false);
   });
 });
 
-describe("PATCH /tickets/:id (assign)", () => {
-  test("forbids non-admins", async () => {
+describe("PATCH /tickets/:id (update)", () => {
+  test("lets an agent update status/category (no admin needed)", async () => {
+    prismaMock.ticket.findUnique.mockResolvedValue({ id: "t-1" });
+    prismaMock.ticket.update.mockResolvedValue(ticketRow(null));
+
+    const res = await send(makeApp(Role.agent), "PATCH", "/tickets/t-1", {
+      status: "resolved",
+      category: "refund_request",
+    });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.ticket.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "t-1" },
+        data: { status: "resolved", category: "refund_request" },
+      }),
+    );
+    // A status/category edit never touches the assignee.
+    expect(prismaMock.user.findFirst).not.toHaveBeenCalled();
+  });
+
+  test("forbids a non-admin from (re)assigning", async () => {
     const res = await send(makeApp(Role.agent), "PATCH", "/tickets/t-1", {
       assigneeId: "u-1",
     });
@@ -114,10 +146,8 @@ describe("PATCH /tickets/:id (assign)", () => {
     expect(prismaMock.ticket.findUnique).not.toHaveBeenCalled();
   });
 
-  test("rejects an invalid body before touching the ticket", async () => {
-    const res = await send(makeApp(), "PATCH", "/tickets/t-1", {
-      assigneeId: "",
-    });
+  test("rejects an empty body before touching the ticket", async () => {
+    const res = await send(makeApp(), "PATCH", "/tickets/t-1", {});
 
     expect(res.status).toBe(400);
     expect(prismaMock.ticket.findUnique).not.toHaveBeenCalled();
@@ -127,7 +157,7 @@ describe("PATCH /tickets/:id (assign)", () => {
     prismaMock.ticket.findUnique.mockResolvedValue(null);
 
     const res = await send(makeApp(), "PATCH", "/tickets/missing", {
-      assigneeId: "u-1",
+      status: "closed",
     });
 
     expect(res.status).toBe(404);
@@ -152,7 +182,7 @@ describe("PATCH /tickets/:id (assign)", () => {
     expect(prismaMock.ticket.update).not.toHaveBeenCalled();
   });
 
-  test("assigns the ticket when the agent is valid", async () => {
+  test("assigns the ticket when an admin picks a valid agent", async () => {
     prismaMock.ticket.findUnique.mockResolvedValue({ id: "t-1" });
     prismaMock.user.findFirst.mockResolvedValue({ id: "u-1" });
     prismaMock.ticket.update.mockResolvedValue(

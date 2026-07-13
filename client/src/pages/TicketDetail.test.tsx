@@ -102,7 +102,7 @@ describe("TicketDetail", () => {
     ).toBeGreaterThan(0);
   });
 
-  it("renders the subject, body, requester, status and category", async () => {
+  it("renders the subject, body, and sender", async () => {
     mockGets();
     renderDetail();
 
@@ -112,15 +112,19 @@ describe("TicketDetail", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Jane Doe")).toBeInTheDocument();
     expect(screen.getByText("jane@example.com")).toBeInTheDocument();
-    expect(screen.getByText("open")).toBeInTheDocument();
-    expect(screen.getByText("Technical question")).toBeInTheDocument();
   });
 
-  it("renders the assignee picker for admins", async () => {
+  it("renders editable status, category, and (admin) assignee controls", async () => {
     mockGets();
     renderDetail();
 
     await screen.findByText("Cannot log in");
+    expect(
+      screen.getByRole("combobox", { name: "Update status" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: "Update category" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("combobox", { name: "Assign to agent" }),
     ).toBeInTheDocument();
