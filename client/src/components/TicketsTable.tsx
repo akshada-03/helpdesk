@@ -44,6 +44,9 @@ import {
 // `undefined` (param omitted) when building the request.
 const ALL = "all";
 
+// Rows per page. Server-side pagination, so this is sent as the `pageSize` param.
+const PAGE_SIZE = 10;
+
 // Badge styling per status.
 const statusVariant: Record<
   TicketStatus,
@@ -171,6 +174,13 @@ export default function TicketsTable() {
     return () => clearTimeout(id);
   }, [search]);
 
+  // 1-based page index. Reset to 1 whenever the result set changes (filter,
+  // search, or sort) so we never land on a page that no longer exists.
+  const [page, setPage] = useState(1);
+  useEffect(() => {
+    setPage(1);
+  }, [status, category, debouncedSearch, sorting]);
+
   const isFiltered = status !== ALL || category !== ALL || debouncedSearch !== "";
 
   const sort = sorting[0] ?? { id: "createdAt", desc: true };
@@ -182,20 +192,25 @@ export default function TicketsTable() {
     ...(status !== ALL ? { status } : {}),
     ...(category !== ALL ? { category } : {}),
     ...(debouncedSearch ? { search: debouncedSearch } : {}),
+    page,
+    pageSize: PAGE_SIZE,
   };
 
   const tickets = useQuery({
     queryKey: ["tickets", params],
     queryFn: async () =>
-      (await api.get<TicketListResponse>("/api/tickets", { params })).data
-        .tickets,
-    // Keep the current rows on screen while re-sorting instead of flashing the
-    // skeleton.
+      (await api.get<TicketListResponse>("/api/tickets", { params })).data,
+    // Keep the current page on screen while re-fetching (sort/filter/paginate)
+    // instead of flashing the skeleton.
     placeholderData: keepPreviousData,
   });
 
+  const rows = tickets.data?.tickets ?? [];
+  const total = tickets.data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
   const table = useReactTable({
-    data: tickets.data ?? [],
+    data: rows,
     columns,
     state: { sorting },
     onSortingChange: setSorting,
@@ -323,7 +338,7 @@ export default function TicketsTable() {
     content = (
       <ErrorAlert error={tickets.error} fallback="Failed to load tickets." />
     );
-  } else if (tickets.data.length === 0) {
+  } else if (rows.length === 0) {
     content = (
       <span className="text-muted-foreground text-sm">
         {isFiltered
@@ -332,23 +347,55 @@ export default function TicketsTable() {
       </span>
     );
   } else {
+    // Row range shown on the current page, e.g. "21–40 of 102".
+    const firstRow = (page - 1) * PAGE_SIZE + 1;
+    const lastRow = firstRow + rows.length - 1;
     content = (
-      <div className="rounded-md border">
-        <Table>
-          {header}
-          <TableBody>
-            {table.getRowModel().rows.map((row) => (
-              <TableRow key={row.id}>
-                {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id}>
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+      <>
+        <div className="rounded-md border">
+          <Table>
+            {header}
+            <TableBody>
+              {table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id}>
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <p className="text-muted-foreground text-sm">
+            Showing {firstRow}–{lastRow} of {total}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1 || tickets.isFetching}
+            >
+              Previous
+            </Button>
+            <span className="text-muted-foreground text-sm">
+              Page {page} of {pageCount}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+              disabled={page >= pageCount || tickets.isFetching}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      </>
     );
   }
 

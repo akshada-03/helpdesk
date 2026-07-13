@@ -37,6 +37,10 @@ export const ticketListQuerySchema = z.object({
     .max(200)
     .optional()
     .transform((v) => (v ? v : undefined)),
+  // Pagination. Params arrive as strings on the query string, so coerce to
+  // numbers; `pageSize` is capped so a client can't request an unbounded page.
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(10),
 });
 export type TicketListQuery = z.infer<typeof ticketListQuerySchema>;
 
@@ -52,6 +56,12 @@ export type TicketListItem = {
   createdAt: string;
 };
 
+// The current page of tickets plus the metadata the client needs to render
+// pagination controls. `total` is the count across all pages for the active
+// filters (not just this page), so the client can derive the page count.
 export type TicketListResponse = {
   tickets: TicketListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
 };

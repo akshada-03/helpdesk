@@ -26,11 +26,26 @@ vi.mock("axios", () => {
 
 const mockedAxios = vi.mocked(axios, { deep: true });
 
-function respondWith(tickets: TicketListItem[]) {
+// `total` defaults to the number of rows (single page); pass it explicitly to
+// simulate a result set that spans multiple pages.
+function respondWith(tickets: TicketListItem[], total = tickets.length) {
   mockedAxios.get.mockResolvedValue({
-    data: { tickets } satisfies TicketListResponse,
+    data: {
+      tickets,
+      total,
+      page: 1,
+      pageSize: 10,
+    } satisfies TicketListResponse,
   } as AxiosResponse<TicketListResponse>);
 }
+
+// Every request also carries the default pagination params; spread this into the
+// expected params so the filter/sort assertions stay focused on what they test.
+const paged = (params: Record<string, unknown>) => ({
+  ...params,
+  page: 1,
+  pageSize: 10,
+});
 
 function respondPending() {
   mockedAxios.get.mockReturnValue(new Promise(() => {}));
@@ -82,7 +97,7 @@ describe("TicketsTable", () => {
 
     await screen.findByText("Cannot log in");
     expect(mockedAxios.get).toHaveBeenCalledWith("/api/tickets", {
-      params: { sortBy: "createdAt", order: "desc" },
+      params: paged({ sortBy: "createdAt", order: "desc" }),
     });
   });
 
@@ -96,7 +111,7 @@ describe("TicketsTable", () => {
     fireEvent.click(screen.getByRole("button", { name: "Subject" }));
     await waitFor(() =>
       expect(mockedAxios.get).toHaveBeenLastCalledWith("/api/tickets", {
-        params: { sortBy: "subject", order: "asc" },
+        params: paged({ sortBy: "subject", order: "asc" }),
       }),
     );
 
@@ -104,7 +119,7 @@ describe("TicketsTable", () => {
     fireEvent.click(screen.getByRole("button", { name: "Subject" }));
     await waitFor(() =>
       expect(mockedAxios.get).toHaveBeenLastCalledWith("/api/tickets", {
-        params: { sortBy: "subject", order: "desc" },
+        params: paged({ sortBy: "subject", order: "desc" }),
       }),
     );
   });
@@ -183,7 +198,7 @@ describe("TicketsTable", () => {
 
     await waitFor(() =>
       expect(mockedAxios.get).toHaveBeenLastCalledWith("/api/tickets", {
-        params: { sortBy: "createdAt", order: "desc", status: "resolved" },
+        params: paged({ sortBy: "createdAt", order: "desc", status: "resolved" }),
       }),
     );
   });
@@ -202,11 +217,11 @@ describe("TicketsTable", () => {
 
     await waitFor(() =>
       expect(mockedAxios.get).toHaveBeenLastCalledWith("/api/tickets", {
-        params: {
+        params: paged({
           sortBy: "createdAt",
           order: "desc",
           category: "technical_question",
-        },
+        }),
       }),
     );
   });
@@ -222,14 +237,14 @@ describe("TicketsTable", () => {
     await u.click(await screen.findByRole("option", { name: "Open" }));
     await waitFor(() =>
       expect(mockedAxios.get).toHaveBeenLastCalledWith("/api/tickets", {
-        params: { sortBy: "createdAt", order: "desc", status: "open" },
+        params: paged({ sortBy: "createdAt", order: "desc", status: "open" }),
       }),
     );
 
     await u.click(screen.getByRole("button", { name: /clear filters/i }));
     await waitFor(() =>
       expect(mockedAxios.get).toHaveBeenLastCalledWith("/api/tickets", {
-        params: { sortBy: "createdAt", order: "desc" },
+        params: paged({ sortBy: "createdAt", order: "desc" }),
       }),
     );
   });
@@ -245,7 +260,7 @@ describe("TicketsTable", () => {
 
     await waitFor(() =>
       expect(mockedAxios.get).toHaveBeenLastCalledWith("/api/tickets", {
-        params: { sortBy: "createdAt", order: "desc", search: "login" },
+        params: paged({ sortBy: "createdAt", order: "desc", search: "login" }),
       }),
     );
   });
@@ -261,7 +276,7 @@ describe("TicketsTable", () => {
     await u.type(box, "refund");
     await waitFor(() =>
       expect(mockedAxios.get).toHaveBeenLastCalledWith("/api/tickets", {
-        params: { sortBy: "createdAt", order: "desc", search: "refund" },
+        params: paged({ sortBy: "createdAt", order: "desc", search: "refund" }),
       }),
     );
 
@@ -269,7 +284,52 @@ describe("TicketsTable", () => {
     expect(box).toHaveValue("");
     await waitFor(() =>
       expect(mockedAxios.get).toHaveBeenLastCalledWith("/api/tickets", {
-        params: { sortBy: "createdAt", order: "desc" },
+        params: paged({ sortBy: "createdAt", order: "desc" }),
+      }),
+    );
+  });
+
+  it("shows the row range and total, and pages forward on Next", async () => {
+    // 25 tickets total, first page of 10 returned.
+    respondWith([newer, older], 25);
+    const u = userEvent.setup();
+    renderWithQuery(<TicketsTable />);
+
+    await screen.findByText("Cannot log in");
+    expect(screen.getByText("Showing 1–2 of 25")).toBeInTheDocument();
+    expect(screen.getByText("Page 1 of 3")).toBeInTheDocument();
+    // On the first page, Previous is disabled.
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+
+    await u.click(screen.getByRole("button", { name: "Next" }));
+
+    await waitFor(() =>
+      expect(mockedAxios.get).toHaveBeenLastCalledWith("/api/tickets", {
+        params: { sortBy: "createdAt", order: "desc", page: 2, pageSize: 10 },
+      }),
+    );
+  });
+
+  it("resets to the first page when a filter changes", async () => {
+    respondWith([newer, older], 25);
+    const u = userEvent.setup();
+    renderWithQuery(<TicketsTable />);
+
+    await screen.findByText("Cannot log in");
+    // Move to page 2 first.
+    await u.click(screen.getByRole("button", { name: "Next" }));
+    await waitFor(() =>
+      expect(mockedAxios.get).toHaveBeenLastCalledWith("/api/tickets", {
+        params: { sortBy: "createdAt", order: "desc", page: 2, pageSize: 10 },
+      }),
+    );
+
+    // Changing the status filter should snap back to page 1.
+    await u.click(screen.getByRole("combobox", { name: "Filter by status" }));
+    await u.click(await screen.findByRole("option", { name: "Open" }));
+    await waitFor(() =>
+      expect(mockedAxios.get).toHaveBeenLastCalledWith("/api/tickets", {
+        params: paged({ sortBy: "createdAt", order: "desc", status: "open" }),
       }),
     );
   });
