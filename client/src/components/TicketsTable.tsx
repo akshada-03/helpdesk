@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   type ColumnDef,
@@ -10,12 +10,25 @@ import {
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 
-import { type TicketStatus, type TicketCategory } from "core/constants/ticket.ts";
+import {
+  ticketCategories,
+  ticketStatuses,
+  type TicketStatus,
+  type TicketCategory,
+} from "core/constants/ticket.ts";
 import type { TicketListItem, TicketListResponse } from "core/schemas/tickets.ts";
 import { api } from "@/lib/api";
 import ErrorAlert from "@/components/ErrorAlert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -25,6 +38,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+
+// Sentinel value for the "no filter" option in each dropdown. Radix Select items
+// can't have an empty-string value, so this stands in for "all" and maps back to
+// `undefined` (param omitted) when building the request.
+const ALL = "all";
 
 // Badge styling per status.
 const statusVariant: Record<
@@ -36,11 +54,15 @@ const statusVariant: Record<
   closed: "outline",
 };
 
+// "open" → "Open".
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 // "general_question" → "General question"; null → "—".
 function formatCategory(category: TicketCategory | null): string {
   if (!category) return "—";
-  const text = category.replace(/_/g, " ");
-  return text.charAt(0).toUpperCase() + text.slice(1);
+  return capitalize(category.replace(/_/g, " "));
 }
 
 // Meta stashed on the table so header cells can tell whether the query is loading
@@ -137,9 +159,30 @@ export default function TicketsTable() {
   const [sorting, setSorting] = useState<SortingState>([
     { id: "createdAt", desc: true },
   ]);
+  // Filters are held as the sentinel ALL ("no filter") or a concrete value.
+  const [status, setStatus] = useState<TicketStatus | typeof ALL>(ALL);
+  const [category, setCategory] = useState<TicketCategory | typeof ALL>(ALL);
+  // `search` is the live input value; `debouncedSearch` is what actually drives
+  // the query, so typing doesn't fire a request per keystroke.
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(id);
+  }, [search]);
+
+  const isFiltered = status !== ALL || category !== ALL || debouncedSearch !== "";
 
   const sort = sorting[0] ?? { id: "createdAt", desc: true };
-  const params = { sortBy: sort.id, order: sort.desc ? "desc" : "asc" };
+  // Omit a filter param entirely when it's unset (ALL / blank) so the server
+  // treats the field as unconstrained.
+  const params = {
+    sortBy: sort.id,
+    order: sort.desc ? "desc" : "asc",
+    ...(status !== ALL ? { status } : {}),
+    ...(category !== ALL ? { category } : {}),
+    ...(debouncedSearch ? { search: debouncedSearch } : {}),
+  };
 
   const tickets = useQuery({
     queryKey: ["tickets", params],
@@ -182,8 +225,73 @@ export default function TicketsTable() {
     </TableHeader>
   );
 
+  // Filter controls stay visible across every query state (loading/empty/error)
+  // so the current filters are always adjustable.
+  const filterBar = (
+    <div className="flex flex-wrap items-center gap-2">
+      <Input
+        type="search"
+        placeholder="Search tickets…"
+        aria-label="Search tickets"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="w-full sm:w-64"
+      />
+
+      <Select
+        value={status}
+        onValueChange={(v) => setStatus(v as TicketStatus | typeof ALL)}
+      >
+        <SelectTrigger className="w-40" aria-label="Filter by status">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ALL}>All statuses</SelectItem>
+          {ticketStatuses.map((s) => (
+            <SelectItem key={s} value={s}>
+              {capitalize(s)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select
+        value={category}
+        onValueChange={(v) => setCategory(v as TicketCategory | typeof ALL)}
+      >
+        <SelectTrigger className="w-48" aria-label="Filter by category">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ALL}>All categories</SelectItem>
+          {ticketCategories.map((c) => (
+            <SelectItem key={c} value={c}>
+              {formatCategory(c)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {isFiltered && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setStatus(ALL);
+            setCategory(ALL);
+            setSearch("");
+            setDebouncedSearch("");
+          }}
+        >
+          Clear filters
+        </Button>
+      )}
+    </div>
+  );
+
+  let content;
   if (tickets.isPending) {
-    return (
+    content = (
       <div className="rounded-md border">
         <Table>
           {header}
@@ -211,36 +319,43 @@ export default function TicketsTable() {
         </Table>
       </div>
     );
-  }
-
-  if (tickets.isError) {
-    return (
+  } else if (tickets.isError) {
+    content = (
       <ErrorAlert error={tickets.error} fallback="Failed to load tickets." />
     );
-  }
-
-  if (tickets.data.length === 0) {
-    return (
-      <span className="text-muted-foreground text-sm">No tickets yet.</span>
+  } else if (tickets.data.length === 0) {
+    content = (
+      <span className="text-muted-foreground text-sm">
+        {isFiltered
+          ? "No tickets match the current filters."
+          : "No tickets yet."}
+      </span>
+    );
+  } else {
+    content = (
+      <div className="rounded-md border">
+        <Table>
+          {header}
+          <TableBody>
+            {table.getRowModel().rows.map((row) => (
+              <TableRow key={row.id}>
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     );
   }
 
   return (
-    <div className="rounded-md border">
-      <Table>
-        {header}
-        <TableBody>
-          {table.getRowModel().rows.map((row) => (
-            <TableRow key={row.id}>
-              {row.getVisibleCells().map((cell) => (
-                <TableCell key={cell.id}>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+    <div className="space-y-4">
+      {filterBar}
+      {content}
     </div>
   );
 }

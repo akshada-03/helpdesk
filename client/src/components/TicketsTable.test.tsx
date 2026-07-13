@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import axios, { type AxiosResponse } from "axios";
 
 import type { TicketListItem, TicketListResponse } from "core/schemas/tickets.ts";
@@ -168,5 +169,123 @@ describe("TicketsTable", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Failed to load tickets.");
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("sends the status param when a status filter is picked", async () => {
+    respondWith([newer]);
+    const u = userEvent.setup();
+    renderWithQuery(<TicketsTable />);
+
+    await screen.findByText("Cannot log in");
+
+    await u.click(screen.getByRole("combobox", { name: "Filter by status" }));
+    await u.click(await screen.findByRole("option", { name: "Resolved" }));
+
+    await waitFor(() =>
+      expect(mockedAxios.get).toHaveBeenLastCalledWith("/api/tickets", {
+        params: { sortBy: "createdAt", order: "desc", status: "resolved" },
+      }),
+    );
+  });
+
+  it("sends the category param when a category filter is picked", async () => {
+    respondWith([newer]);
+    const u = userEvent.setup();
+    renderWithQuery(<TicketsTable />);
+
+    await screen.findByText("Cannot log in");
+
+    await u.click(screen.getByRole("combobox", { name: "Filter by category" }));
+    await u.click(
+      await screen.findByRole("option", { name: "Technical question" }),
+    );
+
+    await waitFor(() =>
+      expect(mockedAxios.get).toHaveBeenLastCalledWith("/api/tickets", {
+        params: {
+          sortBy: "createdAt",
+          order: "desc",
+          category: "technical_question",
+        },
+      }),
+    );
+  });
+
+  it("clears an active filter, dropping the param", async () => {
+    respondWith([newer]);
+    const u = userEvent.setup();
+    renderWithQuery(<TicketsTable />);
+
+    await screen.findByText("Cannot log in");
+
+    await u.click(screen.getByRole("combobox", { name: "Filter by status" }));
+    await u.click(await screen.findByRole("option", { name: "Open" }));
+    await waitFor(() =>
+      expect(mockedAxios.get).toHaveBeenLastCalledWith("/api/tickets", {
+        params: { sortBy: "createdAt", order: "desc", status: "open" },
+      }),
+    );
+
+    await u.click(screen.getByRole("button", { name: /clear filters/i }));
+    await waitFor(() =>
+      expect(mockedAxios.get).toHaveBeenLastCalledWith("/api/tickets", {
+        params: { sortBy: "createdAt", order: "desc" },
+      }),
+    );
+  });
+
+  it("sends the (trimmed) search term as a param after debouncing", async () => {
+    respondWith([newer]);
+    const u = userEvent.setup();
+    renderWithQuery(<TicketsTable />);
+
+    await screen.findByText("Cannot log in");
+
+    await u.type(screen.getByRole("searchbox", { name: "Search tickets" }), "  login  ");
+
+    await waitFor(() =>
+      expect(mockedAxios.get).toHaveBeenLastCalledWith("/api/tickets", {
+        params: { sortBy: "createdAt", order: "desc", search: "login" },
+      }),
+    );
+  });
+
+  it("clears the search term along with the other filters", async () => {
+    respondWith([newer]);
+    const u = userEvent.setup();
+    renderWithQuery(<TicketsTable />);
+
+    await screen.findByText("Cannot log in");
+
+    const box = screen.getByRole("searchbox", { name: "Search tickets" });
+    await u.type(box, "refund");
+    await waitFor(() =>
+      expect(mockedAxios.get).toHaveBeenLastCalledWith("/api/tickets", {
+        params: { sortBy: "createdAt", order: "desc", search: "refund" },
+      }),
+    );
+
+    await u.click(screen.getByRole("button", { name: /clear filters/i }));
+    expect(box).toHaveValue("");
+    await waitFor(() =>
+      expect(mockedAxios.get).toHaveBeenLastCalledWith("/api/tickets", {
+        params: { sortBy: "createdAt", order: "desc" },
+      }),
+    );
+  });
+
+  it("shows a filtered empty state when no tickets match the filter", async () => {
+    respondWith([]);
+    const u = userEvent.setup();
+    renderWithQuery(<TicketsTable />);
+
+    await screen.findByText("No tickets yet.");
+
+    await u.click(screen.getByRole("combobox", { name: "Filter by status" }));
+    await u.click(await screen.findByRole("option", { name: "Closed" }));
+
+    expect(
+      await screen.findByText("No tickets match the current filters."),
+    ).toBeInTheDocument();
   });
 });

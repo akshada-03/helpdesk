@@ -1,10 +1,15 @@
-// Shared ticket domain types. Used by both client and server. Plain union types —
-// consumers use the string literals directly, kept type-safe by the union (e.g.
-// Record<TicketStatus> keys stay exhaustive; values are checked against the type).
+// Shared ticket domain types. Used by both client and server. The values double as
+// runtime lists because they're needed at runtime — as Zod enums for validating the
+// ticket-list filter params and as the option lists for the filter dropdowns — so
+// each is an `as const` array whose element type is still the structural string
+// union (e.g. Record<TicketStatus> keys stay exhaustive; values check against it).
 
-export type TicketStatus = "open" | "resolved" | "closed";
+export const ticketStatuses = ["open", "resolved", "closed"] as const;
+export type TicketStatus = (typeof ticketStatuses)[number];
 
-export type TicketCategory =
-  | "general_question"
-  | "technical_question"
-  | "refund_request";
+export const ticketCategories = [
+  "general_question",
+  "technical_question",
+  "refund_request",
+] as const;
+export type TicketCategory = (typeof ticketCategories)[number];

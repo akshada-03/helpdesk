@@ -31,7 +31,36 @@ ticketsRouter.get("/", async (req, res) => {
     ? { [query.sortBy]: { sort: query.order, nulls: "last" as const } }
     : { [query.sortBy]: query.order };
 
+  // Optional filters. An omitted param leaves the field off `where` entirely, so
+  // it isn't constrained (matches all values). `search` is a case-insensitive
+  // substring match across the subject, requester name/email, and body.
+  const where = {
+    ...(query.status ? { status: query.status } : {}),
+    ...(query.category ? { category: query.category } : {}),
+    ...(query.search
+      ? {
+          OR: [
+            { subject: { contains: query.search, mode: "insensitive" as const } },
+            {
+              requesterName: {
+                contains: query.search,
+                mode: "insensitive" as const,
+              },
+            },
+            {
+              requesterEmail: {
+                contains: query.search,
+                mode: "insensitive" as const,
+              },
+            },
+            { body: { contains: query.search, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  };
+
   const tickets = await prisma.ticket.findMany({
+    where,
     select: {
       id: true,
       subject: true,

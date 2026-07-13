@@ -1,6 +1,11 @@
 import { z } from "zod/v4";
 
-import type { TicketCategory, TicketStatus } from "../constants/ticket.ts";
+import {
+  ticketCategories,
+  ticketStatuses,
+  type TicketCategory,
+  type TicketStatus,
+} from "../constants/ticket.ts";
 
 // Columns the ticket list may be sorted by. Each id doubles as the Prisma field
 // name, so this allowlist is what keeps arbitrary columns out of `orderBy`.
@@ -15,10 +20,23 @@ export type TicketSortField = (typeof ticketSortFields)[number];
 
 // Query params for GET /api/tickets. Shared so the client builds the request and
 // the server validates it against the same allowlist. Defaults reproduce the
-// original behaviour (newest first) when no params are supplied.
+// original behaviour (newest first) when no params are supplied. `status` and
+// `category` are optional filters — omitting a param means "no filter on that
+// field" (all values), so the enums are `.optional()` with no default. `search`
+// is a free-text term matched (case-insensitively) against the subject, requester
+// name/email, and body; it's trimmed and a blank term is normalised to undefined
+// so an empty box is treated as "no search".
 export const ticketListQuerySchema = z.object({
   sortBy: z.enum(ticketSortFields).default("createdAt"),
   order: z.enum(["asc", "desc"]).default("desc"),
+  status: z.enum(ticketStatuses).optional(),
+  category: z.enum(ticketCategories).optional(),
+  search: z
+    .string()
+    .trim()
+    .max(200)
+    .optional()
+    .transform((v) => (v ? v : undefined)),
 });
 export type TicketListQuery = z.infer<typeof ticketListQuerySchema>;
 
