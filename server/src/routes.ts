@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "./middleware/require-auth";
-import { meRouter, usersRouter } from "./routes/users";
+import { agentsRouter, meRouter, usersRouter } from "./routes/users";
 import { ticketsRouter } from "./routes/tickets";
 import { webhooksRouter } from "./routes/webhooks";
 
@@ -29,6 +29,10 @@ apiRouter.use(requireAuth);
 // requireRole(Role.admin) per route on top of the requireAuth guard above).
 apiRouter.use("/me", meRouter);
 apiRouter.use("/users", usersRouter);
+
+// Assignable agents for the ticket-assignee dropdown — admin-only (the router
+// applies requireRole per route). Defined alongside the other user endpoints.
+apiRouter.use("/agents", agentsRouter);
 
 // Ticket list (agents + admins). Created from inbound email via the webhook above.
 apiRouter.use("/tickets", ticketsRouter);

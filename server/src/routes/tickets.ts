@@ -1,15 +1,53 @@
 import { Router } from "express";
+import { Role } from "core/constants/role.ts";
 import {
+  assignTicketSchema,
   ticketListQuerySchema,
+  type TicketDetail,
   type TicketListItem,
   type TicketListResponse,
   type TicketSortField,
 } from "core/schemas/tickets.ts";
 
 import prisma from "../db";
+import type { Prisma } from "../generated/prisma/client";
 import { validate } from "../lib/validate";
+import { requireRole } from "../middleware/require-role";
 
 export const ticketsRouter = Router();
+
+// The assignee relation is embedded in every ticket payload; select just the
+// identity fields (never auth-sensitive columns) so the shape matches
+// TicketAssignee and the list/detail/patch responses stay consistent.
+const assigneeSelect = { select: { id: true, name: true } } as const;
+
+// Columns returned by the detail (GET /:id) and assign (PATCH /:id) endpoints —
+// shared so both produce the exact same TicketDetail shape.
+const detailSelect = {
+  id: true,
+  subject: true,
+  body: true,
+  requesterEmail: true,
+  requesterName: true,
+  status: true,
+  category: true,
+  createdAt: true,
+  updatedAt: true,
+  assignee: assigneeSelect,
+} as const;
+
+// Serializes a Prisma ticket row (selected via `detailSelect`) into the JSON
+// detail shape — the two Date columns become ISO strings. Typing the param with
+// the payload of `detailSelect` keeps the mapping honest without a cast.
+function toTicketDetail(
+  ticket: Prisma.TicketGetPayload<{ select: typeof detailSelect }>,
+): TicketDetail {
+  return {
+    ...ticket,
+    createdAt: ticket.createdAt.toISOString(),
+    updatedAt: ticket.updatedAt.toISOString(),
+  };
+}
 
 // Ticket list for agents/admins. requireAuth is applied by the parent apiRouter,
 // so any authenticated user may read tickets (both roles handle them). Sorting is
@@ -72,6 +110,7 @@ ticketsRouter.get("/", async (req, res) => {
         status: true,
         category: true,
         createdAt: true,
+        assignee: assigneeSelect,
       },
       orderBy,
       skip: (query.page - 1) * query.pageSize,
@@ -92,4 +131,64 @@ ticketsRouter.get("/", async (req, res) => {
     pageSize: query.pageSize,
   };
   res.json(body);
+});
+
+// Single ticket detail. Ids are opaque string UUIDs (not numeric), so there's no
+// parseId step — an unknown id simply misses and 404s. Returns the full record,
+// including the message body and updatedAt, on top of the list fields.
+ticketsRouter.get("/:id", async (req, res) => {
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: req.params.id },
+    select: detailSelect,
+  });
+
+  if (!ticket) {
+    res.status(404).json({ error: "Ticket not found" });
+    return;
+  }
+
+  res.json(toTicketDetail(ticket));
+});
+
+// Assign the ticket to an agent (or clear the assignment with assigneeId: null).
+// Admin-only (requireRole on top of the parent apiRouter's requireAuth) — only
+// admins route tickets. A non-null assigneeId must reference an active
+// (non-deleted) user; anything else is a 400 so we never point a ticket at a
+// missing/disabled account. Returns the updated ticket in the same shape as
+// GET /:id.
+ticketsRouter.patch("/:id", requireRole(Role.admin), async (req, res) => {
+  const data = validate(assignTicketSchema, req.body, res);
+  if (!data) return;
+
+  // A plain ":id" segment is always a single value; the requireRole handler
+  // signature widens it to string | string[], so narrow it here (as users.ts).
+  const id = req.params.id as string;
+
+  const existing = await prisma.ticket.findUnique({
+    where: { id },
+    select: { id: true },
+  });
+  if (!existing) {
+    res.status(404).json({ error: "Ticket not found" });
+    return;
+  }
+
+  if (data.assigneeId !== null) {
+    const agent = await prisma.user.findFirst({
+      where: { id: data.assigneeId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!agent) {
+      res.status(400).json({ error: "Assignee is not a valid agent" });
+      return;
+    }
+  }
+
+  const ticket = await prisma.ticket.update({
+    where: { id },
+    data: { assigneeId: data.assigneeId },
+    select: detailSelect,
+  });
+
+  res.json(toTicketDetail(ticket));
 });

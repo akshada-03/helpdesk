@@ -1,7 +1,11 @@
 import { Router } from "express";
 import { Role } from "core/constants/role.ts";
 import { createUserSchema, updateUserSchema } from "core/schemas/users.ts";
-import type { UserListItem, UserListResponse } from "core/schemas/users.ts";
+import type {
+  AgentListResponse,
+  UserListItem,
+  UserListResponse,
+} from "core/schemas/users.ts";
 
 import prisma from "../db";
 import { Role as UserRole } from "../generated/prisma/enums";
@@ -16,6 +20,23 @@ export const meRouter = Router();
 
 meRouter.get("/", (req, res) => {
   res.json({ user: req.user });
+});
+
+// Assignable agents, for populating the ticket-assignee dropdown. Admin-only —
+// only admins assign tickets, so this is the sole consumer. Returns every active
+// user (both roles handle tickets) with just the identity fields the dropdown
+// needs; never the auth-sensitive columns exposed nowhere outside /users.
+export const agentsRouter = Router();
+
+agentsRouter.get("/", requireRole(Role.admin), async (_req, res) => {
+  const agents = await prisma.user.findMany({
+    where: { deletedAt: null },
+    select: { id: true, name: true, email: true },
+    orderBy: { name: "asc" },
+  });
+
+  const body: AgentListResponse = { agents };
+  res.json(body);
 });
 
 export const usersRouter = Router();

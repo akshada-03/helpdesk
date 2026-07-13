@@ -45,3 +45,17 @@ export type UserListItem = {
 export type UserListResponse = {
   users: UserListItem[];
 };
+
+// Shape of an assignable agent as returned by GET /api/agents. This endpoint is
+// available to any authenticated user (agents assign tickets too), so it exposes
+// only the minimal identity needed to populate an assignee dropdown — never the
+// admin-only fields on UserListItem.
+export type AgentListItem = {
+  id: string;
+  name: string;
+  email: string;
+};
+
+export type AgentListResponse = {
+  agents: AgentListItem[];
+};

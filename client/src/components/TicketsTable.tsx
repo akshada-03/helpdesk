@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   type ColumnDef,
@@ -108,7 +109,12 @@ const columns: ColumnDef<TicketListItem>[] = [
     accessorKey: "subject",
     header: (ctx) => <SortHeader {...ctx} label="Subject" />,
     cell: ({ row }) => (
-      <span className="font-medium">{row.original.subject}</span>
+      <Link
+        to={`/tickets/${row.original.id}`}
+        className="font-medium hover:underline"
+      >
+        {row.original.subject}
+      </Link>
     ),
   },
   {
@@ -142,6 +148,18 @@ const columns: ColumnDef<TicketListItem>[] = [
         {formatCategory(row.original.category)}
       </span>
     ),
+  },
+  {
+    // Assignee isn't in the server's sortBy allowlist, so this column has a plain
+    // (non-sortable) header. Unassigned tickets read "Unassigned".
+    accessorKey: "assignee",
+    header: "Assigned to",
+    cell: ({ row }) =>
+      row.original.assignee ? (
+        row.original.assignee.name
+      ) : (
+        <span className="text-muted-foreground">Unassigned</span>
+      ),
   },
   {
     accessorKey: "createdAt",
@@ -321,6 +339,9 @@ export default function TicketsTable() {
                 </TableCell>
                 <TableCell>
                   <Skeleton className="h-5 w-16 rounded-full" />
+                </TableCell>
+                <TableCell>
+                  <Skeleton className="h-4 w-28" />
                 </TableCell>
                 <TableCell>
                   <Skeleton className="h-4 w-28" />

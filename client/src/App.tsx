@@ -5,6 +5,7 @@ import AdminRoute from "@/components/AdminRoute";
 import Login from "@/pages/Login";
 import Home from "@/pages/Home";
 import Tickets from "@/pages/Tickets";
+import TicketDetail from "@/pages/TicketDetail";
 import Users from "@/pages/Users";
 
 export function App() {
@@ -15,6 +16,7 @@ export function App() {
       <Route element={<ProtectedRoute />}>
         <Route path="/" element={<Home />} />
         <Route path="/tickets" element={<Tickets />} />
+        <Route path="/tickets/:id" element={<TicketDetail />} />
       </Route>
 
       <Route element={<AdminRoute />}>

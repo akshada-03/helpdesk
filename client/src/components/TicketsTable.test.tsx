@@ -64,6 +64,7 @@ const newer: TicketListItem = {
   status: "open",
   category: "technical_question",
   createdAt: "2026-03-02T10:00:00.000Z",
+  assignee: { id: "u-1", name: "Alice Agent" },
 };
 
 const older: TicketListItem = {
@@ -74,6 +75,7 @@ const older: TicketListItem = {
   status: "resolved",
   category: null,
   createdAt: "2026-03-01T10:00:00.000Z",
+  assignee: null,
 };
 
 describe("TicketsTable", () => {
@@ -143,6 +145,30 @@ describe("TicketsTable", () => {
     expect(within(row).getByText("jane@example.com")).toBeInTheDocument();
     expect(within(row).getByText("open")).toBeInTheDocument();
     expect(within(row).getByText("Technical question")).toBeInTheDocument();
+  });
+
+  it("links each subject to its ticket detail page", async () => {
+    respondWith([newer]);
+    renderWithQuery(<TicketsTable />);
+
+    const link = await screen.findByRole("link", { name: "Cannot log in" });
+    expect(link).toHaveAttribute("href", "/tickets/t-newer");
+  });
+
+  it("shows the assignee name, or 'Unassigned' when there is none", async () => {
+    respondWith([newer, older]);
+    renderWithQuery(<TicketsTable />);
+
+    await screen.findByText("Cannot log in");
+    expect(
+      screen.getByRole("columnheader", { name: "Assigned to" }),
+    ).toBeInTheDocument();
+
+    const assigned = screen.getByText("Cannot log in").closest("tr")!;
+    expect(within(assigned).getByText("Alice Agent")).toBeInTheDocument();
+
+    const unassigned = screen.getByText("Refund please").closest("tr")!;
+    expect(within(unassigned).getByText("Unassigned")).toBeInTheDocument();
   });
 
   it("falls back to the email when there is no requester name, and '—' for no category", async () => {

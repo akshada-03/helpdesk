@@ -44,8 +44,16 @@ export const ticketListQuerySchema = z.object({
 });
 export type TicketListQuery = z.infer<typeof ticketListQuerySchema>;
 
+// The assigned agent as embedded in ticket payloads — just the identity needed to
+// render the assignee (never auth-sensitive fields). Null when unassigned.
+export type TicketAssignee = {
+  id: string;
+  name: string;
+};
+
 // Shape of a ticket as returned by GET /api/tickets. `createdAt` is serialized to
 // an ISO string over JSON. `category` is null until AI classification runs.
+// `assignee` is null until an agent is assigned.
 export type TicketListItem = {
   id: string;
   subject: string;
@@ -54,6 +62,7 @@ export type TicketListItem = {
   status: TicketStatus;
   category: TicketCategory | null;
   createdAt: string;
+  assignee: TicketAssignee | null;
 };
 
 // The current page of tickets plus the metadata the client needs to render
@@ -65,3 +74,28 @@ export type TicketListResponse = {
   page: number;
   pageSize: number;
 };
+
+// Full ticket as returned by GET /api/tickets/:id — the list fields plus the
+// message `body` and `updatedAt`. Both dates are serialized to ISO strings over
+// JSON. `category` is null until AI classification runs; `assignee` is null until
+// an agent is assigned.
+export type TicketDetail = {
+  id: string;
+  subject: string;
+  body: string;
+  requesterEmail: string;
+  requesterName: string | null;
+  status: TicketStatus;
+  category: TicketCategory | null;
+  createdAt: string;
+  updatedAt: string;
+  assignee: TicketAssignee | null;
+};
+
+// Request body for PATCH /api/tickets/:id — assign the ticket to an agent, or
+// clear the assignment with null. The id is validated for existence/eligibility
+// on the server (a plain string here); shared so the client sends the same shape.
+export const assignTicketSchema = z.object({
+  assigneeId: z.string().min(1).nullable(),
+});
+export type AssignTicketInput = z.infer<typeof assignTicketSchema>;
