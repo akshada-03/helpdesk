@@ -13,3 +13,9 @@ export const ticketCategories = [
   "refund_request",
 ] as const;
 export type TicketCategory = (typeof ticketCategories)[number];
+
+// Who authored a ticket reply. `agent` replies are posted by an app User (via the
+// detail page); `customer` replies come from the requester (e.g. an email
+// follow-up). Runtime array so it doubles as a Zod enum / Prisma enum mirror.
+export const replySenderTypes = ["agent", "customer"] as const;
+export type ReplySenderType = (typeof replySenderTypes)[number];

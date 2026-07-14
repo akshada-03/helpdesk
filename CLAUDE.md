@@ -96,6 +96,7 @@ The client proxies `/api/*` requests to the server via Vite config (target is co
 ## Testing
 
 - **Prefer component tests** for the majority of coverage (rendering, states, data display, error handling). Reserve E2E tests for things that truly need a real browser + server: navigation, auth redirects, and full-stack integration flows (e.g. webhook creates data that appears in the UI).
+- **Write an E2E test only for behavior a component/unit test cannot cover.** Before adding (or keeping) an E2E test, ask whether a component test already exercises the same behavior — client-side form validation, rendering, loading/empty/error states, and asserting a mocked request payload all belong in component tests. An E2E test earns its place only when it verifies something a mocked-axios component test structurally can't: real cross-page navigation, auth/route protection, or true persistence across a server round-trip or page reload (data actually written to the DB and read back). If an E2E test's behavior is already (or could be) covered by a component test, delete it rather than duplicating the coverage.
 
 ### Component Tests
 

@@ -2,10 +2,12 @@ import { Router } from "express";
 import { Role } from "core/constants/role.ts";
 import {
   updateTicketSchema,
+  createReplySchema,
   ticketListQuerySchema,
   type TicketDetail,
   type TicketListItem,
   type TicketListResponse,
+  type TicketReply,
   type TicketSortField,
 } from "core/schemas/tickets.ts";
 
@@ -46,6 +48,24 @@ function toTicketDetail(
     createdAt: ticket.createdAt.toISOString(),
     updatedAt: ticket.updatedAt.toISOString(),
   };
+}
+
+// Columns returned for a reply — the body/timestamp plus the author identity
+// (never auth-sensitive columns), matching the TicketReply shape.
+const replySelect = {
+  id: true,
+  body: true,
+  senderType: true,
+  createdAt: true,
+  author: assigneeSelect,
+} as const;
+
+// Serializes a Prisma reply row (selected via `replySelect`) into the JSON shape —
+// the Date column becomes an ISO string.
+function toTicketReply(
+  reply: Prisma.TicketReplyGetPayload<{ select: typeof replySelect }>,
+): TicketReply {
+  return { ...reply, createdAt: reply.createdAt.toISOString() };
 }
 
 // Ticket list for agents/admins. requireAuth is applied by the parent apiRouter,
@@ -204,4 +224,59 @@ ticketsRouter.patch("/:id", async (req, res) => {
   });
 
   res.json(toTicketDetail(ticket));
+});
+
+// The reply thread for a ticket, oldest first (chronological reading order).
+// Available to any authenticated user (agents work the ticket). 404s if the
+// ticket doesn't exist so the client can distinguish "no such ticket" from an
+// empty thread.
+ticketsRouter.get("/:id/replies", async (req, res) => {
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: req.params.id },
+    select: { id: true },
+  });
+  if (!ticket) {
+    res.status(404).json({ error: "Ticket not found" });
+    return;
+  }
+
+  const replies = await prisma.ticketReply.findMany({
+    where: { ticketId: req.params.id },
+    select: replySelect,
+    orderBy: { createdAt: "asc" },
+  });
+
+  res.json(replies.map(toTicketReply));
+});
+
+// Post a new reply to a ticket. The author is the authenticated user (from the
+// session), never the request body. Returns the created reply in the same shape
+// as the list endpoint.
+ticketsRouter.post("/:id/replies", async (req, res) => {
+  const data = validate(createReplySchema, req.body, res);
+  if (!data) return;
+
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: req.params.id },
+    select: { id: true },
+  });
+  if (!ticket) {
+    res.status(404).json({ error: "Ticket not found" });
+    return;
+  }
+
+  const reply = await prisma.ticketReply.create({
+    data: {
+      id: crypto.randomUUID(),
+      ticketId: req.params.id,
+      body: data.body,
+      // Posted through the authenticated agent UI, so the sender is always an
+      // agent; customer replies are ingested elsewhere (e.g. inbound email).
+      senderType: "agent",
+      authorId: req.user?.id ?? null,
+    },
+    select: replySelect,
+  });
+
+  res.status(201).json(toTicketReply(reply));
 });

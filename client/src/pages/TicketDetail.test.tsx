@@ -56,13 +56,17 @@ const ticket: TicketDetailData = {
   assignee: null,
 };
 
-// The detail page loads the ticket and (via AssigneeSelect) the agents list.
-// Route GET by URL so both calls get an appropriately shaped response. Pass
-// `{ fail: true }` to make the ticket request reject (agents still resolve).
+// The detail page loads the ticket, its reply thread (via TicketReplies), and
+// (via AssigneeSelect) the agents list. Route GET by URL so each call gets an
+// appropriately shaped response. Pass `{ fail: true }` to make the ticket request
+// reject (agents and replies still resolve).
 function mockGets({ fail = false }: { fail?: boolean } = {}) {
   mockedAxios.get.mockImplementation((url: string) => {
     if (url === "/api/agents") {
       return Promise.resolve({ data: { agents: [] } } as AxiosResponse);
+    }
+    if (url.endsWith("/replies")) {
+      return Promise.resolve({ data: [] } as AxiosResponse);
     }
     return fail
       ? Promise.reject({})

@@ -3,6 +3,7 @@ import { z } from "zod/v4";
 import {
   ticketCategories,
   ticketStatuses,
+  type ReplySenderType,
   type TicketCategory,
   type TicketStatus,
 } from "../constants/ticket.ts";
@@ -109,3 +110,31 @@ export const updateTicketSchema = z
     message: "No fields to update",
   });
 export type UpdateTicketInput = z.infer<typeof updateTicketSchema>;
+
+// The reply author as embedded in reply payloads — just the identity needed to
+// render who wrote it (never auth-sensitive fields). Null when the author's
+// account has since been hard-deleted (the reply is kept regardless).
+export type ReplyAuthor = {
+  id: string;
+  name: string;
+};
+
+// A single reply in a ticket's thread, as returned by GET /api/tickets/:id/replies
+// and POST /api/tickets/:id/replies. `createdAt` is serialized to an ISO string
+// over JSON. `author` is null when the authoring user has been hard-deleted.
+export type TicketReply = {
+  id: string;
+  body: string;
+  // Whether an agent or the customer (requester) wrote this reply.
+  senderType: ReplySenderType;
+  createdAt: string;
+  author: ReplyAuthor | null;
+};
+
+// Request body for POST /api/tickets/:id/replies — a new reply on the thread. The
+// body is trimmed and must be non-empty; the author is taken from the session, not
+// the request. Shared so the client form and the server validate the same rules.
+export const createReplySchema = z.object({
+  body: z.string().trim().min(1, "Reply cannot be empty").max(10000),
+});
+export type CreateReplyInput = z.infer<typeof createReplySchema>;

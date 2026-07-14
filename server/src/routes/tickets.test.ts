@@ -3,7 +3,7 @@ import type { AddressInfo } from "node:net";
 import express, { type Express } from "express";
 
 import { Role } from "core/constants/role.ts";
-import { updateTicketSchema } from "core/schemas/tickets.ts";
+import { createReplySchema, updateTicketSchema } from "core/schemas/tickets.ts";
 
 // Mock the Prisma client (the router's only DB dependency) BEFORE importing the
 // router, so importing it never touches the real database. The type-only
@@ -12,6 +12,7 @@ import { updateTicketSchema } from "core/schemas/tickets.ts";
 const prismaMock = {
   ticket: { findUnique: mock(), update: mock() },
   user: { findFirst: mock() },
+  ticketReply: { findMany: mock(), create: mock() },
 };
 mock.module("../db", () => ({ default: prismaMock }));
 
@@ -40,9 +41,13 @@ function makeApp(role: Role = Role.admin): Express {
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
-    // requireRole only reads req.user.role, so a minimal stub suffices; cast
-    // through unknown to sidestep the full augmented Better Auth user type.
-    (req as unknown as { user: { role: Role } }).user = { role };
+    // The handlers read req.user.role (assignment guard) and req.user.id (reply
+    // author), so a minimal stub with both suffices; cast through unknown to
+    // sidestep the full augmented Better Auth user type.
+    (req as unknown as { user: { id: string; role: Role } }).user = {
+      id: "agent-1",
+      role,
+    };
     next();
   });
   app.use("/tickets", ticketsRouter);
@@ -77,6 +82,8 @@ beforeEach(() => {
   prismaMock.ticket.findUnique.mockReset();
   prismaMock.ticket.update.mockReset();
   prismaMock.user.findFirst.mockReset();
+  prismaMock.ticketReply.findMany.mockReset();
+  prismaMock.ticketReply.create.mockReset();
 });
 
 describe("updateTicketSchema", () => {
@@ -220,5 +227,112 @@ describe("PATCH /tickets/:id (update)", () => {
     expect(prismaMock.ticket.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { assigneeId: null } }),
     );
+  });
+});
+
+// A reply row shaped like `replySelect` (the columns the reply handlers select).
+function replyRow(overrides?: Partial<{ id: string; body: string }>) {
+  return {
+    id: "r-1",
+    body: "On it — can you share a screenshot?",
+    senderType: "agent" as const,
+    createdAt: new Date("2026-03-03T00:00:00.000Z"),
+    author: { id: "agent-1", name: "Alice" },
+    ...overrides,
+  };
+}
+
+describe("createReplySchema", () => {
+  test("accepts a non-empty body and trims it", () => {
+    const parsed = createReplySchema.safeParse({ body: "  hello  " });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.body).toBe("hello");
+  });
+
+  test("rejects an empty or whitespace-only body", () => {
+    expect(createReplySchema.safeParse({ body: "" }).success).toBe(false);
+    expect(createReplySchema.safeParse({ body: "   " }).success).toBe(false);
+  });
+});
+
+describe("GET /tickets/:id/replies", () => {
+  test("returns the thread with ISO dates", async () => {
+    prismaMock.ticket.findUnique.mockResolvedValue({ id: "t-1" });
+    prismaMock.ticketReply.findMany.mockResolvedValue([replyRow()]);
+
+    const res = await send(makeApp(Role.agent), "GET", "/tickets/t-1/replies");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([
+      {
+        id: "r-1",
+        body: "On it — can you share a screenshot?",
+        senderType: "agent",
+        createdAt: "2026-03-03T00:00:00.000Z",
+        author: { id: "agent-1", name: "Alice" },
+      },
+    ]);
+    // Oldest first, scoped to the ticket.
+    expect(prismaMock.ticketReply.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { ticketId: "t-1" },
+        orderBy: { createdAt: "asc" },
+      }),
+    );
+  });
+
+  test("404s when the ticket does not exist", async () => {
+    prismaMock.ticket.findUnique.mockResolvedValue(null);
+
+    const res = await send(makeApp(), "GET", "/tickets/missing/replies");
+
+    expect(res.status).toBe(404);
+    expect(prismaMock.ticketReply.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /tickets/:id/replies", () => {
+  test("creates a reply authored by the current user", async () => {
+    prismaMock.ticket.findUnique.mockResolvedValue({ id: "t-1" });
+    prismaMock.ticketReply.create.mockResolvedValue(replyRow());
+
+    const res = await send(makeApp(Role.agent), "POST", "/tickets/t-1/replies", {
+      body: "On it",
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.author).toEqual({ id: "agent-1", name: "Alice" });
+    expect(res.body.createdAt).toBe("2026-03-03T00:00:00.000Z");
+    expect(prismaMock.ticketReply.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          ticketId: "t-1",
+          body: "On it",
+          senderType: "agent",
+          authorId: "agent-1",
+        }),
+      }),
+    );
+  });
+
+  test("rejects an empty body before touching the ticket", async () => {
+    const res = await send(makeApp(), "POST", "/tickets/t-1/replies", {
+      body: "   ",
+    });
+
+    expect(res.status).toBe(400);
+    expect(prismaMock.ticket.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.ticketReply.create).not.toHaveBeenCalled();
+  });
+
+  test("404s when the ticket does not exist", async () => {
+    prismaMock.ticket.findUnique.mockResolvedValue(null);
+
+    const res = await send(makeApp(), "POST", "/tickets/missing/replies", {
+      body: "hello",
+    });
+
+    expect(res.status).toBe(404);
+    expect(prismaMock.ticketReply.create).not.toHaveBeenCalled();
   });
 });
