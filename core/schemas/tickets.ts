@@ -79,11 +79,14 @@ export type TicketListResponse = {
 // Full ticket as returned by GET /api/tickets/:id — the list fields plus the
 // message `body` and `updatedAt`. Both dates are serialized to ISO strings over
 // JSON. `category` is null until AI classification runs; `assignee` is null until
-// an agent is assigned.
+// an agent is assigned. `bodyHtml` is the original HTML email body (null for text-
+// only emails); it is untrusted markup and must be DOMPurify-sanitized before the
+// client renders it.
 export type TicketDetail = {
   id: string;
   subject: string;
   body: string;
+  bodyHtml: string | null;
   requesterEmail: string;
   requesterName: string | null;
   status: TicketStatus;
@@ -123,8 +126,13 @@ export type ReplyAuthor = {
 // and POST /api/tickets/:id/replies. `createdAt` is serialized to an ISO string
 // over JSON. `author` is null when the authoring user has been hard-deleted.
 export type TicketReply = {
-  id: string;
+  // Auto-incrementing integer PK (unlike Ticket's string id).
+  id: number;
   body: string;
+  // Original HTML body when the reply carried an HTML part (customer replies from
+  // email); null for plain-text agent replies. Untrusted markup — DOMPurify-
+  // sanitize before rendering, exactly like TicketDetail.bodyHtml.
+  bodyHtml: string | null;
   // Whether an agent or the customer (requester) wrote this reply.
   senderType: ReplySenderType;
   createdAt: string;

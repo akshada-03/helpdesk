@@ -3,15 +3,31 @@ import { z } from "zod/v4";
 // SendGrid Inbound Parse posts these fields (among many others we ignore). Only
 // the sender is required; everything else is best-effort. This schema is server-
 // local because it models a provider's payload, not shared client input.
+//
+// Every field is length-capped: the payload is untrusted, so these bounds keep a
+// malicious or malformed webhook from pushing an unbounded string into the DB (and
+// through the AI classifier). Headers get tight caps (~RFC 5322's 998-octet line
+// limit); bodies are roomier, with `html` largest since rich mail is the biggest.
+//
+// Only `from` is required — a message with no sender is unusable. The rest default
+// to "" rather than being optional: SendGrid legitimately omits some (a text-only
+// email has no `html`; a rich one may have no `text`), so instead of leaving them
+// `undefined` we normalise a missing part to an empty string. Downstream, "" is
+// treated the same as absent (subject falls back to a placeholder, an empty body
+// yields null `bodyHtml`, etc.).
 export const inboundEmailSchema = z.object({
-  from: z.string().min(1, "Missing sender"),
-  subject: z.string().optional(),
-  text: z.string().optional(),
-  html: z.string().optional(),
+  from: z.string().min(1, "Missing sender").max(255),
+  subject: z.string().max(255).default(""),
+  text: z.string().max(1000).default(""),
+  html: z.string().max(2000).default(""),
   envelope: z.string().optional(),
 });
 
-export type InboundEmail = z.infer<typeof inboundEmailSchema>;
+// The raw inbound shape (what a caller may pass): `from` is required, the rest are
+// optional on input because their defaults fill them in during validation. Using
+// the input type keeps `ticketFromInboundEmail` callable with a partial payload
+// while the validated result (all fields present) is still assignable to it.
+export type InboundEmail = z.input<typeof inboundEmailSchema>;
 
 // Extracts an email + display name from a From header like
 // `"Jane Doe <jane@example.com>"` or a bare `jane@example.com`.
@@ -55,17 +71,22 @@ function envelopeFrom(envelope: string | undefined): string | null {
 // Derives the ticket fields from a validated inbound email. Pure (no I/O): the
 // envelope sender wins for the address, the display name comes from the From
 // header, the subject falls back to a placeholder, and the body prefers the plain
-// text part, else tag-stripped HTML.
+// text part, else tag-stripped HTML. `bodyHtml` preserves the original HTML part
+// (if any) verbatim for rich rendering — it is untrusted markup and MUST be
+// sanitized (DOMPurify) before it reaches the DOM.
 export function ticketFromInboundEmail(data: InboundEmail): {
   subject: string;
   body: string;
+  bodyHtml: string | null;
   requesterEmail: string;
   requesterName: string | null;
 } {
   const parsed = parseFrom(data.from);
   const requesterEmail = envelopeFrom(data.envelope) ?? parsed.email;
   const subject = data.subject?.trim() || "(no subject)";
-  const body = data.text?.trim() || (data.html ? htmlToText(data.html) : "");
+  const html = data.html?.trim();
+  const body = data.text?.trim() || (html ? htmlToText(html) : "");
+  const bodyHtml = html || null;
 
-  return { subject, body, requesterEmail, requesterName: parsed.name };
+  return { subject, body, bodyHtml, requesterEmail, requesterName: parsed.name };
 }

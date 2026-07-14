@@ -85,8 +85,24 @@ describe("ticketFromInboundEmail", () => {
     expect(result.body).toBe("Hello there");
   });
 
-  test("yields an empty body when neither text nor html is present", () => {
-    expect(ticketFromInboundEmail({ from: "a@b.com" }).body).toBe("");
+  test("preserves the raw HTML part in bodyHtml (trimmed)", () => {
+    const result = ticketFromInboundEmail({
+      from: "a@b.com",
+      html: "  <p>Hello <b>there</b></p>  ",
+    });
+    expect(result.bodyHtml).toBe("<p>Hello <b>there</b></p>");
+  });
+
+  test("leaves bodyHtml null when the email has no HTML part", () => {
+    expect(ticketFromInboundEmail({ from: "a@b.com", text: "hi" }).bodyHtml).toBe(
+      null,
+    );
+  });
+
+  test("yields an empty body and null bodyHtml when neither part is present", () => {
+    const result = ticketFromInboundEmail({ from: "a@b.com" });
+    expect(result.body).toBe("");
+    expect(result.bodyHtml).toBe(null);
   });
 });
 

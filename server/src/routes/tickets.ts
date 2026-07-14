@@ -28,6 +28,7 @@ const detailSelect = {
   id: true,
   subject: true,
   body: true,
+  bodyHtml: true,
   requesterEmail: true,
   requesterName: true,
   status: true,
@@ -55,6 +56,7 @@ function toTicketDetail(
 const replySelect = {
   id: true,
   body: true,
+  bodyHtml: true,
   senderType: true,
   createdAt: true,
   author: assigneeSelect,
@@ -267,7 +269,7 @@ ticketsRouter.post("/:id/replies", async (req, res) => {
 
   const reply = await prisma.ticketReply.create({
     data: {
-      id: crypto.randomUUID(),
+      // id is an auto-incrementing integer — the DB assigns it.
       ticketId: req.params.id,
       body: data.body,
       // Posted through the authenticated agent UI, so the sender is always an

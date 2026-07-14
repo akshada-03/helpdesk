@@ -25,6 +25,7 @@ function ticketRow(assignee: { id: string; name: string } | null) {
     id: "t-1",
     subject: "Cannot log in",
     body: "Help",
+    bodyHtml: null,
     requesterEmail: "sam@example.com",
     requesterName: null,
     status: "open",
@@ -231,10 +232,13 @@ describe("PATCH /tickets/:id (update)", () => {
 });
 
 // A reply row shaped like `replySelect` (the columns the reply handlers select).
-function replyRow(overrides?: Partial<{ id: string; body: string }>) {
+function replyRow(
+  overrides?: Partial<{ id: number; body: string; bodyHtml: string | null }>,
+) {
   return {
-    id: "r-1",
+    id: 1,
     body: "On it — can you share a screenshot?",
+    bodyHtml: null as string | null,
     senderType: "agent" as const,
     createdAt: new Date("2026-03-03T00:00:00.000Z"),
     author: { id: "agent-1", name: "Alice" },
@@ -265,8 +269,9 @@ describe("GET /tickets/:id/replies", () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual([
       {
-        id: "r-1",
+        id: 1,
         body: "On it — can you share a screenshot?",
+        bodyHtml: null,
         senderType: "agent",
         createdAt: "2026-03-03T00:00:00.000Z",
         author: { id: "agent-1", name: "Alice" },

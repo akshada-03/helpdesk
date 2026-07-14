@@ -1,4 +1,7 @@
+import { useMemo } from "react";
+
 import type { TicketDetail as TicketDetailData } from "core/schemas/tickets.ts";
+import { sanitizeHtml } from "@/lib/sanitize";
 import {
   Card,
   CardContent,
@@ -21,6 +24,14 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 // already-loaded ticket; the editable controls and reply thread live in their own
 // components.
 export default function TicketDetail({ ticket }: { ticket: TicketDetailData }) {
+  // When the inbound email carried an HTML part, render it (sanitized) so the
+  // original formatting survives; otherwise fall back to the plain-text body.
+  // Sanitizing is cheap but memoized so it doesn't re-run on unrelated re-renders.
+  const cleanHtml = useMemo(
+    () => (ticket.bodyHtml ? sanitizeHtml(ticket.bodyHtml) : null),
+    [ticket.bodyHtml],
+  );
+
   return (
     <Card>
       <CardHeader>
@@ -44,7 +55,15 @@ export default function TicketDetail({ ticket }: { ticket: TicketDetailData }) {
 
         <div className="space-y-1">
           <h2 className="text-muted-foreground text-xs font-medium">Message</h2>
-          <p className="text-sm whitespace-pre-wrap">{ticket.body}</p>
+          {cleanHtml !== null ? (
+            // Sanitized via DOMPurify above — safe to inject as markup.
+            <div
+              className="text-sm [&_a]:underline"
+              dangerouslySetInnerHTML={{ __html: cleanHtml }}
+            />
+          ) : (
+            <p className="text-sm whitespace-pre-wrap">{ticket.body}</p>
+          )}
         </div>
 
         <dl className="grid grid-cols-2 gap-4">

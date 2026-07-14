@@ -105,7 +105,13 @@ enum TicketCategory {
 model Ticket {
   id             String          @id
   subject        String
+  // Plain-text body — the searchable/AI-consumed form (text part, else tag-
+  // stripped HTML). Always present.
   body           String
+  // Original HTML body from the inbound email, when the message had an HTML part.
+  // Null for text-only emails (and all tickets predating this column). Rendered in
+  // the UI only after DOMPurify sanitization — never trust it as safe markup.
+  bodyHtml       String?
   requesterEmail String
   requesterName  String?
   status         TicketStatus    @default(open)
@@ -138,6 +144,11 @@ model TicketReply {
   ticketId   String
   ticket     Ticket          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   body       String
+  // Original HTML body, when this reply arrived with an HTML part (customer
+  // replies ingested from email). Null for agent replies composed as plain text in
+  // the UI (and any reply predating this column). Rendered only after DOMPurify
+  // sanitization — never trust it as safe markup (mirrors Ticket.bodyHtml).
+  bodyHtml   String?
   // Whether an app User (agent) or the requester (customer) wrote this reply.
   senderType ReplySenderType
   authorId   String?

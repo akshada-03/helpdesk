@@ -27,16 +27,18 @@ vi.mock("axios", () => {
 const mockedAxios = vi.mocked(axios, { deep: true });
 
 const reply: TicketReply = {
-  id: "r-1",
+  id: 1,
   body: "Thanks for reaching out — can you share a screenshot?",
+  bodyHtml: null,
   senderType: "agent",
   createdAt: "2026-03-03T12:00:00.000Z",
   author: { id: "u-1", name: "Alice Agent" },
 };
 
 const customerReply: TicketReply = {
-  id: "r-2",
+  id: 2,
   body: "Here's the screenshot you asked for.",
+  bodyHtml: null,
   senderType: "customer",
   createdAt: "2026-03-03T13:00:00.000Z",
   author: null,
@@ -68,6 +70,29 @@ describe("TicketReplies", () => {
     expect(screen.getByText("Agent")).toBeInTheDocument();
     expect(screen.getByText("Customer")).toBeInTheDocument();
     expect(screen.getByText(customerReply.body)).toBeInTheDocument();
+  });
+
+  it("renders a reply's HTML body sanitized, stripping XSS", async () => {
+    mockedAxios.get.mockResolvedValue({
+      data: [
+        {
+          ...customerReply,
+          body: "plain fallback",
+          bodyHtml:
+            '<p>See <strong>this</strong></p><img src=x onerror="alert(1)"><script>alert(2)</script>',
+        },
+      ],
+    } as AxiosResponse);
+    renderWithQuery(<TicketReplies ticketId="t-1" />);
+
+    // The safe formatting survives…
+    const strong = await screen.findByText("this");
+    expect(strong.tagName).toBe("STRONG");
+    // …the plain-text fallback is not used when HTML is present…
+    expect(screen.queryByText("plain fallback")).not.toBeInTheDocument();
+    // …and the dangerous markup never reaches the DOM.
+    expect(document.querySelector("script")).toBeNull();
+    expect(document.querySelector("img")?.hasAttribute("onerror")).toBe(false);
   });
 
   it("shows an empty state when there are no replies", async () => {

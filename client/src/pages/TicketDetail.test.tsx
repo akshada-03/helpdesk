@@ -47,6 +47,7 @@ const ticket: TicketDetailData = {
   id: "t-1",
   subject: "Cannot log in",
   body: "I keep getting an error when I try to sign in.",
+  bodyHtml: null,
   requesterEmail: "jane@example.com",
   requesterName: "Jane Doe",
   status: "open",

@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,6 +10,7 @@ import {
   type TicketReply,
 } from "core/schemas/tickets.ts";
 import { api } from "@/lib/api";
+import { sanitizeHtml } from "@/lib/sanitize";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -28,6 +30,14 @@ import ErrorMessage from "@/components/ErrorMessage";
 // a muted panel) so the two sides of the conversation are easy to tell apart.
 function ReplyItem({ reply }: { reply: TicketReply }) {
   const isAgent = reply.senderType === "agent";
+
+  // When the reply carried an HTML part (customer replies from email), render it
+  // sanitized so the original formatting survives; otherwise fall back to the
+  // plain-text body. Mirrors TicketDetail's handling of the inbound message.
+  const cleanHtml = useMemo(
+    () => (reply.bodyHtml ? sanitizeHtml(reply.bodyHtml) : null),
+    [reply.bodyHtml],
+  );
 
   return (
     <div
@@ -49,7 +59,15 @@ function ReplyItem({ reply }: { reply: TicketReply }) {
           {new Date(reply.createdAt).toLocaleString()}
         </span>
       </div>
-      <p className="text-sm whitespace-pre-wrap">{reply.body}</p>
+      {cleanHtml !== null ? (
+        // Sanitized via DOMPurify above — safe to inject as markup.
+        <div
+          className="text-sm [&_a]:underline"
+          dangerouslySetInnerHTML={{ __html: cleanHtml }}
+        />
+      ) : (
+        <p className="text-sm whitespace-pre-wrap">{reply.body}</p>
+      )}
     </div>
   );
 }
