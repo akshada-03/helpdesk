@@ -197,7 +197,10 @@ usersRouter.patch("/:id", requireRole(Role.admin), async (req, res) => {
 // Admin-only soft delete. The user row is preserved (deletedAt is stamped) but
 // hidden from the list and blocked from signing in (see the session hook in
 // lib/auth.ts). Admins can never be deleted. Any active sessions are revoked so
-// the user is logged out immediately.
+// the user is logged out immediately, and their tickets are unassigned so they
+// return to the queue — Ticket.assignee's onDelete: SetNull only fires on a hard
+// delete, so the soft delete has to do it explicitly. Authored replies keep their
+// authorId: the thread is an audit trail, not a work queue.
 usersRouter.delete("/:id", requireRole(Role.admin), async (req, res) => {
   const id = req.params.id as string;
 
@@ -218,6 +221,10 @@ usersRouter.delete("/:id", requireRole(Role.admin), async (req, res) => {
       data: { deletedAt: now, updatedAt: now },
     });
     await tx.session.deleteMany({ where: { userId: id } });
+    await tx.ticket.updateMany({
+      where: { assigneeId: id },
+      data: { assigneeId: null },
+    });
   });
 
   res.status(204).end();
