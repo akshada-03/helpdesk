@@ -2,11 +2,12 @@ import { useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 
 import {
   createReplySchema,
   type CreateReplyInput,
+  type PolishReplyResponse,
   type TicketReply,
 } from "core/schemas/tickets.ts";
 import { api } from "@/lib/api";
@@ -101,6 +102,34 @@ export default function TicketReplies({ ticketId }: { ticketId: string }) {
     },
   });
 
+  // Rewrites the current draft via GPT and puts the result back in the compose box.
+  // Nothing is sent to the customer — the agent still reviews and submits it — so
+  // the polished text replaces the draft in place, keeping the form dirty.
+  const polishReply = useMutation({
+    mutationFn: async (body: string) =>
+      (
+        await api.post<PolishReplyResponse>(
+          `/api/tickets/${ticketId}/replies/polish`,
+          { body },
+        )
+      ).data,
+    onSuccess: (data) => {
+      form.setValue("body", data.body, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    },
+  });
+
+  // The draft, watched so both actions can disable themselves when there is nothing
+  // to work with (the server would 400 on an empty body anyway). Gating the buttons
+  // on this is why an empty draft never reaches createReplySchema's "Reply cannot be
+  // empty" rule — the schema still enforces it server-side, it just isn't how the
+  // agent finds out. Whitespace-only counts as empty, matching the schema's trim().
+  const draft = form.watch("body");
+  const isEmpty = draft.trim() === "";
+  const busy = polishReply.isPending || sendReply.isPending;
+
   return (
     <Card>
       <CardHeader>
@@ -150,6 +179,13 @@ export default function TicketReplies({ ticketId }: { ticketId: string }) {
               )}
             />
 
+            {polishReply.isError && (
+              <ErrorAlert
+                error={polishReply.error}
+                fallback="Failed to polish the reply."
+              />
+            )}
+
             {sendReply.isError && (
               <ErrorAlert
                 error={sendReply.error}
@@ -157,8 +193,24 @@ export default function TicketReplies({ ticketId }: { ticketId: string }) {
               />
             )}
 
-            <div className="flex justify-end">
-              <Button type="submit" disabled={sendReply.isPending}>
+            <div className="flex justify-end gap-2">
+              {/* Polish rewrites the draft in place rather than submitting, so it
+                  must be type="button" — a bare button inside a form would submit
+                  and send the unpolished reply. */}
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy || isEmpty}
+                onClick={() => polishReply.mutate(draft)}
+              >
+                {polishReply.isPending ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <Sparkles />
+                )}
+                Polish
+              </Button>
+              <Button type="submit" disabled={busy || isEmpty}>
                 {sendReply.isPending && <Loader2 className="animate-spin" />}
                 Send reply
               </Button>

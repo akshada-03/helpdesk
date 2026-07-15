@@ -3,7 +3,11 @@ import type { AddressInfo } from "node:net";
 import express, { type Express } from "express";
 
 import { Role } from "core/constants/role.ts";
-import { createReplySchema, updateTicketSchema } from "core/schemas/tickets.ts";
+import {
+  createReplySchema,
+  polishReplySchema,
+  updateTicketSchema,
+} from "core/schemas/tickets.ts";
 
 // Mock the Prisma client (the router's only DB dependency) BEFORE importing the
 // router, so importing it never touches the real database. The type-only
@@ -15,6 +19,11 @@ const prismaMock = {
   ticketReply: { findMany: mock(), create: mock() },
 };
 mock.module("../db", () => ({ default: prismaMock }));
+
+// Stub the AI helper too, so the polish route's tests never reach OpenAI (no
+// network, no API key, deterministic output).
+const polishReplyMock = mock();
+mock.module("../lib/ai", () => ({ polishReply: polishReplyMock }));
 
 const { ticketsRouter } = await import("./tickets");
 
@@ -42,13 +51,16 @@ function makeApp(role: Role = Role.admin): Express {
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
-    // The handlers read req.user.role (assignment guard) and req.user.id (reply
-    // author), so a minimal stub with both suffices; cast through unknown to
-    // sidestep the full augmented Better Auth user type.
-    (req as unknown as { user: { id: string; role: Role } }).user = {
-      id: "agent-1",
-      role,
-    };
+    // The handlers read req.user.role (assignment guard), req.user.id (reply
+    // author), and req.user.name (polish sign-off), so a minimal stub with those
+    // suffices; cast through unknown to sidestep the full augmented Better Auth
+    // user type.
+    (req as unknown as { user: { id: string; name: string; role: Role } }).user =
+      {
+        id: "agent-1",
+        name: "Alice Agent",
+        role,
+      };
     next();
   });
   app.use("/tickets", ticketsRouter);
@@ -85,6 +97,7 @@ beforeEach(() => {
   prismaMock.user.findFirst.mockReset();
   prismaMock.ticketReply.findMany.mockReset();
   prismaMock.ticketReply.create.mockReset();
+  polishReplyMock.mockReset();
 });
 
 describe("updateTicketSchema", () => {
@@ -259,6 +272,44 @@ describe("createReplySchema", () => {
   });
 });
 
+describe("polishReplySchema", () => {
+  test("accepts a non-empty draft and trims it", () => {
+    const parsed = polishReplySchema.safeParse({ body: "  we r on it  " });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.body).toBe("we r on it");
+  });
+
+  test("rejects an empty or whitespace-only draft", () => {
+    // Nothing to polish — this is what keeps a blank request off the model.
+    expect(polishReplySchema.safeParse({ body: "" }).success).toBe(false);
+    expect(polishReplySchema.safeParse({ body: "   " }).success).toBe(false);
+  });
+
+  test("shares createReplySchema's length limit, so a polishable draft is sendable", () => {
+    // The polished text goes back into the compose box and must still pass the
+    // send schema; a draft the polisher accepts but sending rejects would trap the
+    // agent with text they cannot post.
+    const max = "a".repeat(10000);
+    expect(polishReplySchema.safeParse({ body: max }).success).toBe(true);
+    expect(createReplySchema.safeParse({ body: max }).success).toBe(true);
+
+    const tooLong = "a".repeat(10001);
+    expect(polishReplySchema.safeParse({ body: tooLong }).success).toBe(false);
+    expect(createReplySchema.safeParse({ body: tooLong }).success).toBe(false);
+  });
+
+  test("ignores unknown fields rather than trusting them", () => {
+    // The route signs replies with the session's agent; a body-supplied name must
+    // never survive parsing into the handler's data.
+    const parsed = polishReplySchema.safeParse({
+      body: "draft",
+      agentName: "Mallory",
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data).not.toHaveProperty("agentName");
+  });
+});
+
 describe("GET /tickets/:id/replies", () => {
   test("returns the thread with ISO dates", async () => {
     prismaMock.ticket.findUnique.mockResolvedValue({ id: "t-1" });
@@ -339,5 +390,132 @@ describe("POST /tickets/:id/replies", () => {
 
     expect(res.status).toBe(404);
     expect(prismaMock.ticketReply.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /tickets/:id/replies/polish", () => {
+  test("returns the polished draft, grounded in the ticket", async () => {
+    prismaMock.ticket.findUnique.mockResolvedValue({
+      subject: "Cannot log in",
+      body: "Help",
+      requesterName: "Sam Customer",
+    });
+    polishReplyMock.mockResolvedValue("We're on it — sorry for the trouble.");
+
+    const res = await send(
+      makeApp(Role.agent),
+      "POST",
+      "/tickets/t-1/replies/polish",
+      { body: "we r on it" },
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ body: "We're on it — sorry for the trouble." });
+    expect(polishReplyMock).toHaveBeenCalledWith({
+      draft: "we r on it",
+      subject: "Cannot log in",
+      ticketBody: "Help",
+      requesterName: "Sam Customer",
+      agentName: "Alice Agent",
+    });
+  });
+
+  test("signs with the session's agent, not anything in the request body", async () => {
+    prismaMock.ticket.findUnique.mockResolvedValue({
+      subject: "Cannot log in",
+      body: "Help",
+      requesterName: "Sam Customer",
+    });
+    polishReplyMock.mockResolvedValue("Polished.");
+
+    // A caller trying to sign the reply as someone else must be ignored.
+    await send(makeApp(Role.agent), "POST", "/tickets/t-1/replies/polish", {
+      body: "draft",
+      agentName: "Mallory",
+    });
+
+    expect(polishReplyMock).toHaveBeenCalledWith(
+      expect.objectContaining({ agentName: "Alice Agent" }),
+    );
+  });
+
+  test("passes a null requester name through rather than inventing one", async () => {
+    // Inbound email often carries no name — the helper handles the fallback, so the
+    // route must not substitute a placeholder.
+    prismaMock.ticket.findUnique.mockResolvedValue({
+      subject: "Cannot log in",
+      body: "Help",
+      requesterName: null,
+    });
+    polishReplyMock.mockResolvedValue("Polished.");
+
+    await send(makeApp(Role.agent), "POST", "/tickets/t-1/replies/polish", {
+      body: "draft",
+    });
+
+    expect(polishReplyMock).toHaveBeenCalledWith(
+      expect.objectContaining({ requesterName: null }),
+    );
+  });
+
+  test("persists nothing — polishing is a pure transform", async () => {
+    prismaMock.ticket.findUnique.mockResolvedValue({
+      subject: "Cannot log in",
+      body: "Help",
+      requesterName: "Sam Customer",
+    });
+    polishReplyMock.mockResolvedValue("Polished.");
+
+    await send(makeApp(Role.agent), "POST", "/tickets/t-1/replies/polish", {
+      body: "draft",
+    });
+
+    expect(prismaMock.ticketReply.create).not.toHaveBeenCalled();
+    expect(prismaMock.ticket.update).not.toHaveBeenCalled();
+  });
+
+  test("rejects an empty draft without calling the model", async () => {
+    const res = await send(
+      makeApp(Role.agent),
+      "POST",
+      "/tickets/t-1/replies/polish",
+      { body: "   " },
+    );
+
+    expect(res.status).toBe(400);
+    expect(polishReplyMock).not.toHaveBeenCalled();
+  });
+
+  test("404s for an unknown ticket without calling the model", async () => {
+    prismaMock.ticket.findUnique.mockResolvedValue(null);
+
+    const res = await send(
+      makeApp(Role.agent),
+      "POST",
+      "/tickets/ghost/replies/polish",
+      { body: "draft" },
+    );
+
+    expect(res.status).toBe(404);
+    expect(polishReplyMock).not.toHaveBeenCalled();
+  });
+
+  test("502s with a JSON error when the model call fails", async () => {
+    prismaMock.ticket.findUnique.mockResolvedValue({
+      subject: "Cannot log in",
+      body: "Help",
+      requesterName: "Sam Customer",
+    });
+    polishReplyMock.mockRejectedValue(new Error("upstream is down"));
+
+    const res = await send(
+      makeApp(Role.agent),
+      "POST",
+      "/tickets/t-1/replies/polish",
+      { body: "draft" },
+    );
+
+    expect(res.status).toBe(502);
+    expect(res.body.error).toBeString();
   });
 });

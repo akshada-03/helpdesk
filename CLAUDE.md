@@ -9,7 +9,7 @@ A ticket management system that uses AI to classify, respond to, and route suppo
 - **Frontend**: React + TypeScript + Vite (port 5173) + shadcn/ui
 - **Backend**: Express 5 + TypeScript + Bun (port 3000)
 - **Database**: PostgreSQL with Prisma ORM
-- **AI**: OpenAI GPT-5 Nano via Vercel AI SDK (`@ai-sdk/openai`)
+- **AI**: Vercel AI SDK against any OpenAI-compatible endpoint (`@ai-sdk/openai-compatible`), configured entirely by env — `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL` (see `server/.env.example`; currently Google Gemini's OpenAI-compat endpoint). Provider and model are config, not code: features call the helpers exported from `server/src/lib/ai.ts` (e.g. `polishReply`) and never construct a model themselves. AI is optional — the app boots and runs without it; only the reply polisher needs a key.
 - **Auth**: Better Auth (email/password, database sessions)
 - **Job Queue**: pg-boss (PostgreSQL-backed, runs in `pgboss` schema)
 

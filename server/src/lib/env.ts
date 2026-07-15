@@ -28,3 +28,16 @@ export const API_BASE_URL = isProduction
 // requires a matching `?token=`; leaving it unset (local dev / E2E) disables the
 // check so posts and tests work without a token.
 export const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
+
+// AI provider config (see lib/ai.ts). Any OpenAI-compatible /chat/completions
+// endpoint works, so the vendor is a matter of configuration, not code:
+//   AI_BASE_URL — endpoint root, e.g. Gemini's OpenAI-compat URL
+//   AI_API_KEY  — that provider's key
+//   AI_MODEL    — model id to send, e.g. gemini-2.5-flash
+// Deliberately NOT required at boot: the app is fully usable without AI (only the
+// reply polisher needs it), and E2E/dev runs shouldn't need a key. lib/ai.ts throws
+// a clear error if a feature is invoked while these are unset, which the route
+// turns into a 502.
+export const AI_BASE_URL = process.env.AI_BASE_URL;
+export const AI_API_KEY = process.env.AI_API_KEY;
+export const AI_MODEL = process.env.AI_MODEL;

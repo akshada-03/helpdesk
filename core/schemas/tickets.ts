@@ -146,3 +146,19 @@ export const createReplySchema = z.object({
   body: z.string().trim().min(1, "Reply cannot be empty").max(10000),
 });
 export type CreateReplyInput = z.infer<typeof createReplySchema>;
+
+// Request body for POST /api/tickets/:id/replies/polish — the agent's draft, which
+// the server rewrites via GPT. Mirrors createReplySchema's limits: the draft is the
+// same text that would be sent, so the same bounds apply (and the polished result
+// must stay postable).
+export const polishReplySchema = z.object({
+  body: z.string().trim().min(1, "Nothing to polish").max(10000),
+});
+export type PolishReplyInput = z.infer<typeof polishReplySchema>;
+
+// Response from POST /api/tickets/:id/replies/polish — the rewritten draft. Nothing
+// is persisted; the client drops this into the compose box for the agent to review
+// and edit before sending.
+export type PolishReplyResponse = {
+  body: string;
+};

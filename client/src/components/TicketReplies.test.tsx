@@ -111,16 +111,40 @@ describe("TicketReplies", () => {
     );
   });
 
-  it("blocks submitting an empty reply and shows a validation message", async () => {
+  it("disables send until there is a reply, rather than validating on submit", async () => {
     mockedAxios.get.mockResolvedValue({ data: [] } as AxiosResponse);
     const u = userEvent.setup();
     renderWithQuery(<TicketReplies ticketId="t-1" />);
 
     await screen.findByText("No replies yet.");
-    await u.click(screen.getByRole("button", { name: /send reply/i }));
+    const send = screen.getByRole("button", { name: /send reply/i });
+    expect(send).toBeDisabled();
 
-    expect(await screen.findByText("Reply cannot be empty")).toBeInTheDocument();
+    // Clicking the disabled button does nothing — no request, and crucially no
+    // validation error (the empty state is communicated by the disabled button).
+    await u.click(send);
     expect(mockedAxios.post).not.toHaveBeenCalled();
+    expect(screen.queryByText("Reply cannot be empty")).not.toBeInTheDocument();
+
+    // Typing enables it.
+    await u.type(
+      screen.getByRole("textbox", { name: "Reply message" }),
+      "Here is my reply",
+    );
+    expect(send).toBeEnabled();
+  });
+
+  it("keeps send disabled for a whitespace-only draft", async () => {
+    mockedAxios.get.mockResolvedValue({ data: [] } as AxiosResponse);
+    const u = userEvent.setup();
+    renderWithQuery(<TicketReplies ticketId="t-1" />);
+
+    await screen.findByText("No replies yet.");
+    // The schema trims before checking, so spaces alone must not count as a reply.
+    await u.type(screen.getByRole("textbox", { name: "Reply message" }), "   ");
+
+    expect(screen.getByRole("button", { name: /send reply/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /polish/i })).toBeDisabled();
   });
 
   it("posts a new reply, refetches the thread, and clears the form", async () => {
@@ -163,5 +187,82 @@ describe("TicketReplies", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Failed to send reply.",
     );
+  });
+
+  describe("polish", () => {
+    // Renders the component with an empty thread and types `draft` into the
+    // compose box, returning it for further interaction.
+    async function composeDraft(draft: string) {
+      mockedAxios.get.mockResolvedValue({ data: [] } as AxiosResponse);
+      const u = userEvent.setup();
+      renderWithQuery(<TicketReplies ticketId="t-1" />);
+
+      await screen.findByText("No replies yet.");
+      const box = screen.getByRole("textbox", { name: "Reply message" });
+      await u.type(box, draft);
+      return { u, box };
+    }
+
+    it("is disabled until there is a draft to polish", async () => {
+      mockedAxios.get.mockResolvedValue({ data: [] } as AxiosResponse);
+      renderWithQuery(<TicketReplies ticketId="t-1" />);
+
+      await screen.findByText("No replies yet.");
+      expect(screen.getByRole("button", { name: /polish/i })).toBeDisabled();
+    });
+
+    it("replaces the draft with the polished text without sending it", async () => {
+      mockedAxios.post.mockResolvedValue({
+        data: { body: "We are on it — sorry for the trouble." },
+      } as AxiosResponse);
+      const { u, box } = await composeDraft("we r on it");
+
+      await u.click(screen.getByRole("button", { name: /polish/i }));
+
+      await waitFor(() =>
+        expect(box).toHaveValue("We are on it — sorry for the trouble."),
+      );
+      // Polishing hits only the polish endpoint — the reply is NOT posted.
+      expect(mockedAxios.post).toHaveBeenCalledTimes(1);
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        "/api/tickets/t-1/replies/polish",
+        { body: "we r on it" },
+      );
+    });
+
+    it("keeps the polished text sendable", async () => {
+      mockedAxios.post
+        .mockResolvedValueOnce({ data: { body: "Polished text." } } as AxiosResponse)
+        .mockResolvedValueOnce({ data: reply } as AxiosResponse);
+      const { u } = await composeDraft("rough draft");
+
+      await u.click(screen.getByRole("button", { name: /polish/i }));
+      await waitFor(() =>
+        expect(
+          screen.getByRole("textbox", { name: "Reply message" }),
+        ).toHaveValue("Polished text."),
+      );
+      await u.click(screen.getByRole("button", { name: /send reply/i }));
+
+      await waitFor(() =>
+        expect(mockedAxios.post).toHaveBeenLastCalledWith(
+          "/api/tickets/t-1/replies",
+          { body: "Polished text." },
+        ),
+      );
+    });
+
+    it("shows an error alert and keeps the draft when polishing fails", async () => {
+      mockedAxios.post.mockRejectedValue({});
+      const { u, box } = await composeDraft("my draft");
+
+      await u.click(screen.getByRole("button", { name: /polish/i }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Failed to polish the reply.",
+      );
+      // The agent's work survives a failed polish so they can still send it.
+      expect(box).toHaveValue("my draft");
+    });
   });
 });

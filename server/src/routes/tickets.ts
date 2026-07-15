@@ -3,7 +3,9 @@ import { Role } from "core/constants/role.ts";
 import {
   updateTicketSchema,
   createReplySchema,
+  polishReplySchema,
   ticketListQuerySchema,
+  type PolishReplyResponse,
   type TicketDetail,
   type TicketListItem,
   type TicketListResponse,
@@ -13,6 +15,7 @@ import {
 
 import prisma from "../db";
 import type { Prisma } from "../generated/prisma/client";
+import { polishReply } from "../lib/ai";
 import { validate } from "../lib/validate";
 
 export const ticketsRouter = Router();
@@ -249,6 +252,54 @@ ticketsRouter.get("/:id/replies", async (req, res) => {
   });
 
   res.json(replies.map(toTicketReply));
+});
+
+// Rewrite an agent's draft reply via GPT and hand it back. Nothing is persisted —
+// the client puts the result in the compose box for the agent to review, edit, and
+// send (or discard), so this is a pure transform of the submitted draft. Available
+// to any authenticated user, like the reply endpoints it sits alongside.
+//
+// This handler *does* try/catch, against the usual convention (see CLAUDE.md): a
+// failing model call is an expected upstream failure (outage, rate limit, missing
+// key), and letting it throw would hit Express's default handler and return an HTML
+// 500 that ErrorAlert can't extract a message from. The agent's draft is still in
+// the box, so a clean 502 lets them just send it as-is.
+ticketsRouter.post("/:id/replies/polish", async (req, res) => {
+  const data = validate(polishReplySchema, req.body, res);
+  if (!data) return;
+
+  // The rewrite is grounded in the ticket, so load the message alongside the
+  // existence check the other reply routes do. requesterName is nullable (inbound
+  // email often carries no name) — polishReply falls back to a neutral greeting.
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: req.params.id },
+    select: { subject: true, body: true, requesterName: true },
+  });
+  if (!ticket) {
+    res.status(404).json({ error: "Ticket not found" });
+    return;
+  }
+
+  let polished: string;
+  try {
+    polished = await polishReply({
+      draft: data.body,
+      subject: ticket.subject,
+      ticketBody: ticket.body,
+      requesterName: ticket.requesterName,
+      // Signed with the authenticated agent, from the session — never the request
+      // body, so a client can't sign a reply as someone else. requireAuth (applied
+      // by the parent apiRouter) guarantees req.user is set.
+      agentName: req.user!.name,
+    });
+  } catch (error) {
+    console.error("Failed to polish reply:", error);
+    res.status(502).json({ error: "Could not polish the reply. Try again." });
+    return;
+  }
+
+  const body: PolishReplyResponse = { body: polished };
+  res.json(body);
 });
 
 // Post a new reply to a ticket. The author is the authenticated user (from the
