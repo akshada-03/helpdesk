@@ -57,7 +57,7 @@ function respondError() {
 
 // Newest first (matching the server's createdAt desc order).
 const newer: TicketListItem = {
-  id: "t-newer",
+  id: 102,
   subject: "Cannot log in",
   requesterEmail: "jane@example.com",
   requesterName: "Jane Doe",
@@ -68,7 +68,7 @@ const newer: TicketListItem = {
 };
 
 const older: TicketListItem = {
-  id: "t-older",
+  id: 101,
   subject: "Refund please",
   requesterEmail: "sam@example.com",
   requesterName: null,
@@ -152,7 +152,7 @@ describe("TicketsTable", () => {
     renderWithQuery(<TicketsTable />);
 
     const link = await screen.findByRole("link", { name: "Cannot log in" });
-    expect(link).toHaveAttribute("href", "/tickets/t-newer");
+    expect(link).toHaveAttribute("href", "/tickets/102");
   });
 
   it("shows the assignee name, or 'Unassigned' when there is none", async () => {

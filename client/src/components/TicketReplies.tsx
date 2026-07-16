@@ -76,7 +76,7 @@ function ReplyItem({ reply }: { reply: TicketReply }) {
 // The reply thread and compose form for a ticket, rendered below the inbound
 // message on the detail page. Owns its own replies query (keyed on the ticket id)
 // so it refreshes independently of the ticket detail.
-export default function TicketReplies({ ticketId }: { ticketId: string }) {
+export default function TicketReplies({ ticketId }: { ticketId: number }) {
   const queryClient = useQueryClient();
 
   const replies = useQuery({

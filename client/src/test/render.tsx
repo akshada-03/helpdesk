@@ -6,7 +6,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { createTestQueryClient } from "@/test/query-client";
 
 type RenderWithQueryOptions = Omit<RenderOptions, "wrapper"> & {
-  // Initial history entries for the wrapping router (e.g. ["/tickets/t-1"] so a
+  // Initial history entries for the wrapping router (e.g. ["/tickets/103"] so a
   // component reading `useParams` sees the id). Defaults to ["/"].
   initialEntries?: string[];
 };

@@ -103,7 +103,13 @@ enum TicketCategory {
 // plain fields. Category is set later by AI classification (not yet built), so it
 // is nullable.
 model Ticket {
-  id             String          @id
+  // Auto-incrementing integer (SERIAL) assigned by the database — the webhook no
+  // longer supplies an id. Ticket numbers are therefore sequential and guessable;
+  // that's acceptable because every ticket route is behind requireAuth and any
+  // authenticated agent may read every ticket anyway, so there is nothing an
+  // enumerable id discloses that the list endpoint doesn't. See the
+  // ticket_int_id migration.
+  id             Int             @id @default(autoincrement())
   subject        String
   // Plain-text body — the searchable/AI-consumed form (text part, else tag-
   // stripped HTML). Always present.
@@ -140,8 +146,11 @@ enum ReplySenderType {
 }
 
 model TicketReply {
-  id         String          @id
-  ticketId   String
+  // Auto-incrementing integer (SERIAL) — see the reply_int_id migration. Replies
+  // are only ever addressed through their ticket, so there's nothing to gain from
+  // an unguessable id.
+  id         Int             @id @default(autoincrement())
+  ticketId   Int
   ticket     Ticket          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   body       String
   // Original HTML body, when this reply arrived with an HTML part (customer

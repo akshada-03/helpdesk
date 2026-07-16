@@ -10,7 +10,8 @@
     "test": "bun test",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
-    "db:seed": "bun prisma/seed.ts"
+    "db:seed": "bun prisma/seed.ts",
+    "db:seed:replies": "bun prisma/seed-replies.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.14",

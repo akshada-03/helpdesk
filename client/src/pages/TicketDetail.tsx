@@ -1,5 +1,6 @@
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { z } from "zod/v4";
 
 import type { TicketDetail as TicketDetailData } from "core/schemas/tickets.ts";
 import { api } from "@/lib/api";
@@ -11,21 +12,36 @@ import TicketReplies from "@/components/TicketReplies";
 import TicketDetailSkeleton from "@/components/TicketDetailSkeleton";
 import ErrorAlert from "@/components/ErrorAlert";
 
+// Ticket ids are integers, but a route param is always a string — anything can be
+// typed into the URL bar. Parsing here keeps the rest of the page working in
+// numbers, and mirrors the server's `parseId`: a non-numeric id is not a bad
+// request to retry, it's simply a ticket that doesn't exist.
+const ticketIdSchema = z.coerce.number().int().positive();
+
 // Ticket detail page, reached by clicking a subject in the ticket list. Owns its
 // own query keyed on the `:id` route param; the read-only summary (TicketDetail),
 // editable properties (UpdateTicket), and reply thread each render from the loaded
 // ticket.
 export default function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const parsedId = ticketIdSchema.safeParse(id);
+  const ticketId = parsedId.success ? parsedId.data : null;
 
   const ticket = useQuery({
-    queryKey: ["ticket", id],
+    // The key must hold the *number*, not the raw param: AssigneeSelect and
+    // TicketFieldSelect seed this cache entry with `["ticket", ticket.id]` after a
+    // PATCH, and ["ticket", "103"] and ["ticket", 103] are different keys — a
+    // string here would silently strand their updates in an entry nobody reads.
+    queryKey: ["ticket", ticketId],
     queryFn: async () =>
-      (await api.get<TicketDetailData>(`/api/tickets/${id}`)).data,
+      (await api.get<TicketDetailData>(`/api/tickets/${ticketId}`)).data,
+    enabled: ticketId !== null,
   });
 
   let content;
-  if (ticket.isPending) {
+  if (ticketId === null) {
+    content = <ErrorAlert message="Ticket not found." />;
+  } else if (ticket.isPending) {
     content = <TicketDetailSkeleton />;
   } else if (ticket.isError) {
     content = (

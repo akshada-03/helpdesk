@@ -26,7 +26,7 @@ const ADMIN_NAME = "Admin";
 async function createTicket(
   page: Page,
   subject: string,
-): Promise<string> {
+): Promise<number> {
   const response = await page.request.post(
     `${API_URL}/api/webhooks/inbound-email`,
     {
@@ -42,8 +42,10 @@ async function createTicket(
     },
   );
   expect(response.status()).toBe(200);
-  const { ticketId } = (await response.json()) as { ticketId: string };
-  expect(ticketId).toBeTruthy();
+  const { ticketId } = (await response.json()) as { ticketId: number };
+  // Ids are positive autoincrement integers — assert that rather than mere
+  // truthiness, which a number would pass for any non-zero value.
+  expect(ticketId).toBeGreaterThan(0);
   return ticketId;
 }
 
@@ -62,7 +64,7 @@ test.describe("Ticket detail — reply thread", () => {
     // clicking the ticket's subject link (exercises the protected route + hop).
     await page.goto("/tickets");
     await page.getByRole("link", { name: subject }).click();
-    await expect(page).toHaveURL(/\/tickets\/[0-9a-f-]+$/);
+    await expect(page).toHaveURL(/\/tickets\/\d+$/);
     // Subject renders as the detail card's title, confirming the detail loaded.
     await expect(page.getByText(subject)).toBeVisible();
 

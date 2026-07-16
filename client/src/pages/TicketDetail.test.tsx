@@ -44,7 +44,7 @@ vi.mock("axios", () => {
 const mockedAxios = vi.mocked(axios, { deep: true });
 
 const ticket: TicketDetailData = {
-  id: "t-1",
+  id: 103,
   subject: "Cannot log in",
   body: "I keep getting an error when I try to sign in.",
   bodyHtml: null,
@@ -75,7 +75,7 @@ function mockGets({ fail = false }: { fail?: boolean } = {}) {
   });
 }
 
-function renderDetail(id = "t-1") {
+function renderDetail(id: number | string = 103) {
   return renderWithQuery(
     <Routes>
       <Route path="/tickets/:id" element={<TicketDetail />} />
@@ -92,10 +92,10 @@ describe("TicketDetail", () => {
 
   it("requests the ticket by the id from the route", async () => {
     mockGets();
-    renderDetail("t-1");
+    renderDetail(103);
 
     await screen.findByText("Cannot log in");
-    expect(mockedAxios.get).toHaveBeenCalledWith("/api/tickets/t-1");
+    expect(mockedAxios.get).toHaveBeenCalledWith("/api/tickets/103");
   });
 
   it("shows a skeleton while loading", () => {

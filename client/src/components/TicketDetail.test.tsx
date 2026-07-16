@@ -1,11 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 
 import type { TicketDetail as TicketDetailData } from "core/schemas/tickets.ts";
+import { renderWithQuery } from "@/test/render";
 import TicketDetail from "./TicketDetail";
 
+// Rendered with a QueryClient (rather than a bare render) for the summarize action
+// below the message, which owns a mutation. It issues no request until clicked, so
+// nothing here needs a mocked Axios — TicketSummary.test.tsx covers the request.
+
 const ticket: TicketDetailData = {
-  id: "t-1",
+  id: 103,
   subject: "Cannot log in",
   body: "I keep getting an error when I try to sign in.",
   bodyHtml: null,
@@ -20,7 +25,7 @@ const ticket: TicketDetailData = {
 
 describe("TicketDetail", () => {
   it("renders the subject, sender, message, and timestamps", () => {
-    render(<TicketDetail ticket={ticket} />);
+    renderWithQuery(<TicketDetail ticket={ticket} />);
 
     expect(screen.getByText("Cannot log in")).toBeInTheDocument();
     expect(screen.getByText("Jane Doe")).toBeInTheDocument();
@@ -32,8 +37,24 @@ describe("TicketDetail", () => {
     expect(screen.getByText("Updated")).toBeInTheDocument();
   });
 
+  it("offers to summarize the ticket, below the message", () => {
+    renderWithQuery(<TicketDetail ticket={ticket} />);
+
+    const message = screen.getByText(
+      "I keep getting an error when I try to sign in.",
+    );
+    const summarize = screen.getByRole("button", { name: /summarize/i });
+
+    // DOCUMENT_POSITION_FOLLOWING — the action reads as belonging to the message
+    // above it, which is what makes it obvious what's being summarized.
+    expect(
+      message.compareDocumentPosition(summarize) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it("falls back to the email when the requester has no name", () => {
-    render(<TicketDetail ticket={{ ...ticket, requesterName: null }} />);
+    renderWithQuery(<TicketDetail ticket={{ ...ticket, requesterName: null }} />);
 
     // The email stands in for the sender name; it appears exactly once (no
     // separate name + email spans).

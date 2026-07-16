@@ -30,7 +30,7 @@ webhooksRouter.post("/inbound-email", upload.none(), async (req, res) => {
 
   const ticket = await prisma.ticket.create({
     data: {
-      id: crypto.randomUUID(),
+      // id is an auto-incrementing integer — the DB assigns it.
       ...ticketFromInboundEmail(data),
       // status defaults to `open`; category is left null until AI classification.
     },

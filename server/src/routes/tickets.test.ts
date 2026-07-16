@@ -20,10 +20,14 @@ const prismaMock = {
 };
 mock.module("../db", () => ({ default: prismaMock }));
 
-// Stub the AI helper too, so the polish route's tests never reach OpenAI (no
-// network, no API key, deterministic output).
+// Stub the AI helpers too, so the polish/summary routes' tests never reach OpenAI
+// (no network, no API key, deterministic output).
 const polishReplyMock = mock();
-mock.module("../lib/ai", () => ({ polishReply: polishReplyMock }));
+const summarizeTicketMock = mock();
+mock.module("../lib/ai", () => ({
+  polishReply: polishReplyMock,
+  summarizeTicket: summarizeTicketMock,
+}));
 
 const { ticketsRouter } = await import("./tickets");
 
@@ -31,7 +35,7 @@ const { ticketsRouter } = await import("./tickets");
 // selects). `assignee` varies per test.
 function ticketRow(assignee: { id: string; name: string } | null) {
   return {
-    id: "t-1",
+    id: 103,
     subject: "Cannot log in",
     body: "Help",
     bodyHtml: null,
@@ -98,6 +102,7 @@ beforeEach(() => {
   prismaMock.ticketReply.findMany.mockReset();
   prismaMock.ticketReply.create.mockReset();
   polishReplyMock.mockReset();
+  summarizeTicketMock.mockReset();
 });
 
 describe("updateTicketSchema", () => {
@@ -138,10 +143,10 @@ describe("updateTicketSchema", () => {
 
 describe("PATCH /tickets/:id (update)", () => {
   test("lets an agent update status/category (no admin needed)", async () => {
-    prismaMock.ticket.findUnique.mockResolvedValue({ id: "t-1" });
+    prismaMock.ticket.findUnique.mockResolvedValue({ id: 103 });
     prismaMock.ticket.update.mockResolvedValue(ticketRow(null));
 
-    const res = await send(makeApp(Role.agent), "PATCH", "/tickets/t-1", {
+    const res = await send(makeApp(Role.agent), "PATCH", "/tickets/103", {
       status: "resolved",
       category: "refund_request",
     });
@@ -149,7 +154,7 @@ describe("PATCH /tickets/:id (update)", () => {
     expect(res.status).toBe(200);
     expect(prismaMock.ticket.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "t-1" },
+        where: { id: 103 },
         data: { status: "resolved", category: "refund_request" },
       }),
     );
@@ -158,7 +163,7 @@ describe("PATCH /tickets/:id (update)", () => {
   });
 
   test("forbids a non-admin from (re)assigning", async () => {
-    const res = await send(makeApp(Role.agent), "PATCH", "/tickets/t-1", {
+    const res = await send(makeApp(Role.agent), "PATCH", "/tickets/103", {
       assigneeId: "u-1",
     });
 
@@ -168,7 +173,7 @@ describe("PATCH /tickets/:id (update)", () => {
   });
 
   test("rejects an empty body before touching the ticket", async () => {
-    const res = await send(makeApp(), "PATCH", "/tickets/t-1", {});
+    const res = await send(makeApp(), "PATCH", "/tickets/103", {});
 
     expect(res.status).toBe(400);
     expect(prismaMock.ticket.findUnique).not.toHaveBeenCalled();
@@ -177,7 +182,7 @@ describe("PATCH /tickets/:id (update)", () => {
   test("404s when the ticket does not exist", async () => {
     prismaMock.ticket.findUnique.mockResolvedValue(null);
 
-    const res = await send(makeApp(), "PATCH", "/tickets/missing", {
+    const res = await send(makeApp(), "PATCH", "/tickets/999", {
       status: "closed",
     });
 
@@ -185,11 +190,24 @@ describe("PATCH /tickets/:id (update)", () => {
     expect(prismaMock.ticket.update).not.toHaveBeenCalled();
   });
 
+  // Ids are integers now, so a non-numeric param can't identify a ticket. It's a
+  // 404 like any other miss (not a 400) and never reaches the database — a
+  // hand-typed URL shouldn't cost a query.
+  test("404s on a non-numeric id without querying", async () => {
+    const res = await send(makeApp(), "PATCH", "/tickets/abc", {
+      status: "closed",
+    });
+
+    expect(res.status).toBe(404);
+    expect(prismaMock.ticket.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.ticket.update).not.toHaveBeenCalled();
+  });
+
   test("400s when the assignee is not a valid (active) user", async () => {
-    prismaMock.ticket.findUnique.mockResolvedValue({ id: "t-1" });
+    prismaMock.ticket.findUnique.mockResolvedValue({ id: 103 });
     prismaMock.user.findFirst.mockResolvedValue(null); // no matching active user
 
-    const res = await send(makeApp(), "PATCH", "/tickets/t-1", {
+    const res = await send(makeApp(), "PATCH", "/tickets/103", {
       assigneeId: "ghost",
     });
 
@@ -204,13 +222,13 @@ describe("PATCH /tickets/:id (update)", () => {
   });
 
   test("assigns the ticket when an admin picks a valid agent", async () => {
-    prismaMock.ticket.findUnique.mockResolvedValue({ id: "t-1" });
+    prismaMock.ticket.findUnique.mockResolvedValue({ id: 103 });
     prismaMock.user.findFirst.mockResolvedValue({ id: "u-1" });
     prismaMock.ticket.update.mockResolvedValue(
       ticketRow({ id: "u-1", name: "Alice" }),
     );
 
-    const res = await send(makeApp(), "PATCH", "/tickets/t-1", {
+    const res = await send(makeApp(), "PATCH", "/tickets/103", {
       assigneeId: "u-1",
     });
 
@@ -220,17 +238,17 @@ describe("PATCH /tickets/:id (update)", () => {
     expect(res.body.createdAt).toBe("2026-03-01T00:00:00.000Z");
     expect(prismaMock.ticket.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "t-1" },
+        where: { id: 103 },
         data: { assigneeId: "u-1" },
       }),
     );
   });
 
   test("unassigns without validating a user when assigneeId is null", async () => {
-    prismaMock.ticket.findUnique.mockResolvedValue({ id: "t-1" });
+    prismaMock.ticket.findUnique.mockResolvedValue({ id: 103 });
     prismaMock.ticket.update.mockResolvedValue(ticketRow(null));
 
-    const res = await send(makeApp(), "PATCH", "/tickets/t-1", {
+    const res = await send(makeApp(), "PATCH", "/tickets/103", {
       assigneeId: null,
     });
 
@@ -312,10 +330,10 @@ describe("polishReplySchema", () => {
 
 describe("GET /tickets/:id/replies", () => {
   test("returns the thread with ISO dates", async () => {
-    prismaMock.ticket.findUnique.mockResolvedValue({ id: "t-1" });
+    prismaMock.ticket.findUnique.mockResolvedValue({ id: 103 });
     prismaMock.ticketReply.findMany.mockResolvedValue([replyRow()]);
 
-    const res = await send(makeApp(Role.agent), "GET", "/tickets/t-1/replies");
+    const res = await send(makeApp(Role.agent), "GET", "/tickets/103/replies");
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual([
@@ -331,7 +349,7 @@ describe("GET /tickets/:id/replies", () => {
     // Oldest first, scoped to the ticket.
     expect(prismaMock.ticketReply.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { ticketId: "t-1" },
+        where: { ticketId: 103 },
         orderBy: { createdAt: "asc" },
       }),
     );
@@ -340,7 +358,7 @@ describe("GET /tickets/:id/replies", () => {
   test("404s when the ticket does not exist", async () => {
     prismaMock.ticket.findUnique.mockResolvedValue(null);
 
-    const res = await send(makeApp(), "GET", "/tickets/missing/replies");
+    const res = await send(makeApp(), "GET", "/tickets/999/replies");
 
     expect(res.status).toBe(404);
     expect(prismaMock.ticketReply.findMany).not.toHaveBeenCalled();
@@ -349,10 +367,10 @@ describe("GET /tickets/:id/replies", () => {
 
 describe("POST /tickets/:id/replies", () => {
   test("creates a reply authored by the current user", async () => {
-    prismaMock.ticket.findUnique.mockResolvedValue({ id: "t-1" });
+    prismaMock.ticket.findUnique.mockResolvedValue({ id: 103 });
     prismaMock.ticketReply.create.mockResolvedValue(replyRow());
 
-    const res = await send(makeApp(Role.agent), "POST", "/tickets/t-1/replies", {
+    const res = await send(makeApp(Role.agent), "POST", "/tickets/103/replies", {
       body: "On it",
     });
 
@@ -362,7 +380,7 @@ describe("POST /tickets/:id/replies", () => {
     expect(prismaMock.ticketReply.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          ticketId: "t-1",
+          ticketId: 103,
           body: "On it",
           senderType: "agent",
           authorId: "agent-1",
@@ -372,7 +390,7 @@ describe("POST /tickets/:id/replies", () => {
   });
 
   test("rejects an empty body before touching the ticket", async () => {
-    const res = await send(makeApp(), "POST", "/tickets/t-1/replies", {
+    const res = await send(makeApp(), "POST", "/tickets/103/replies", {
       body: "   ",
     });
 
@@ -384,7 +402,7 @@ describe("POST /tickets/:id/replies", () => {
   test("404s when the ticket does not exist", async () => {
     prismaMock.ticket.findUnique.mockResolvedValue(null);
 
-    const res = await send(makeApp(), "POST", "/tickets/missing/replies", {
+    const res = await send(makeApp(), "POST", "/tickets/999/replies", {
       body: "hello",
     });
 
@@ -405,7 +423,7 @@ describe("POST /tickets/:id/replies/polish", () => {
     const res = await send(
       makeApp(Role.agent),
       "POST",
-      "/tickets/t-1/replies/polish",
+      "/tickets/103/replies/polish",
       { body: "we r on it" },
     );
 
@@ -429,7 +447,7 @@ describe("POST /tickets/:id/replies/polish", () => {
     polishReplyMock.mockResolvedValue("Polished.");
 
     // A caller trying to sign the reply as someone else must be ignored.
-    await send(makeApp(Role.agent), "POST", "/tickets/t-1/replies/polish", {
+    await send(makeApp(Role.agent), "POST", "/tickets/103/replies/polish", {
       body: "draft",
       agentName: "Mallory",
     });
@@ -449,7 +467,7 @@ describe("POST /tickets/:id/replies/polish", () => {
     });
     polishReplyMock.mockResolvedValue("Polished.");
 
-    await send(makeApp(Role.agent), "POST", "/tickets/t-1/replies/polish", {
+    await send(makeApp(Role.agent), "POST", "/tickets/103/replies/polish", {
       body: "draft",
     });
 
@@ -466,7 +484,7 @@ describe("POST /tickets/:id/replies/polish", () => {
     });
     polishReplyMock.mockResolvedValue("Polished.");
 
-    await send(makeApp(Role.agent), "POST", "/tickets/t-1/replies/polish", {
+    await send(makeApp(Role.agent), "POST", "/tickets/103/replies/polish", {
       body: "draft",
     });
 
@@ -478,7 +496,7 @@ describe("POST /tickets/:id/replies/polish", () => {
     const res = await send(
       makeApp(Role.agent),
       "POST",
-      "/tickets/t-1/replies/polish",
+      "/tickets/103/replies/polish",
       { body: "   " },
     );
 
@@ -511,10 +529,147 @@ describe("POST /tickets/:id/replies/polish", () => {
     const res = await send(
       makeApp(Role.agent),
       "POST",
-      "/tickets/t-1/replies/polish",
+      "/tickets/103/replies/polish",
       { body: "draft" },
     );
 
+    expect(res.status).toBe(502);
+    expect(res.body.error).toBeString();
+  });
+});
+
+describe("POST /tickets/:id/summary", () => {
+  // The ticket columns the summary route selects.
+  function summaryTicket(requesterName: string | null = "Sam Customer") {
+    return { subject: "Cannot log in", body: "Help, I'm locked out", requesterName };
+  }
+
+  test("summarizes the ticket together with its reply thread", async () => {
+    prismaMock.ticket.findUnique.mockResolvedValue(summaryTicket());
+    prismaMock.ticketReply.findMany.mockResolvedValue([
+      {
+        senderType: "agent",
+        body: "Can you share a screenshot?",
+        author: { name: "Alice" },
+      },
+      { senderType: "customer", body: "Here it is.", author: null },
+    ]);
+    summarizeTicketMock.mockResolvedValue("Sam is locked out; Alice asked for a screenshot.");
+
+    const res = await send(makeApp(Role.agent), "POST", "/tickets/103/summary");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      summary: "Sam is locked out; Alice asked for a screenshot.",
+    });
+    // The thread is read server-side and flattened to the helper's shape — the
+    // customer's turn carries no author name, the agent's does.
+    expect(summarizeTicketMock).toHaveBeenCalledWith({
+      subject: "Cannot log in",
+      ticketBody: "Help, I'm locked out",
+      requesterName: "Sam Customer",
+      replies: [
+        {
+          senderType: "agent",
+          body: "Can you share a screenshot?",
+          authorName: "Alice",
+        },
+        { senderType: "customer", body: "Here it is.", authorName: null },
+      ],
+    });
+  });
+
+  test("reads the thread oldest first, scoped to the ticket", async () => {
+    prismaMock.ticket.findUnique.mockResolvedValue(summaryTicket());
+    prismaMock.ticketReply.findMany.mockResolvedValue([]);
+    summarizeTicketMock.mockResolvedValue("Summary.");
+
+    await send(makeApp(Role.agent), "POST", "/tickets/103/summary");
+
+    // The prompt tells the model the thread is chronological, so the order the
+    // rows arrive in is load-bearing, not cosmetic.
+    expect(prismaMock.ticketReply.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { ticketId: 103 },
+        orderBy: { createdAt: "asc" },
+      }),
+    );
+  });
+
+  test("summarizes a ticket with no replies yet", async () => {
+    prismaMock.ticket.findUnique.mockResolvedValue(summaryTicket());
+    prismaMock.ticketReply.findMany.mockResolvedValue([]);
+    summarizeTicketMock.mockResolvedValue("Sam is locked out. Nobody has replied.");
+
+    const res = await send(makeApp(Role.agent), "POST", "/tickets/103/summary");
+
+    // An empty thread is normal (a brand-new ticket), not an error.
+    expect(res.status).toBe(200);
+    expect(summarizeTicketMock).toHaveBeenCalledWith(
+      expect.objectContaining({ replies: [] }),
+    );
+  });
+
+  test("names an agent whose account was hard-deleted as no one", async () => {
+    prismaMock.ticket.findUnique.mockResolvedValue(summaryTicket());
+    prismaMock.ticketReply.findMany.mockResolvedValue([
+      { senderType: "agent", body: "Looking into it.", author: null },
+    ]);
+    summarizeTicketMock.mockResolvedValue("Summary.");
+
+    await send(makeApp(Role.agent), "POST", "/tickets/103/summary");
+
+    // The reply outlives its author; it's still an agent turn, just unattributed.
+    expect(summarizeTicketMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        replies: [
+          { senderType: "agent", body: "Looking into it.", authorName: null },
+        ],
+      }),
+    );
+  });
+
+  test("passes a null requester name through rather than inventing one", async () => {
+    prismaMock.ticket.findUnique.mockResolvedValue(summaryTicket(null));
+    prismaMock.ticketReply.findMany.mockResolvedValue([]);
+    summarizeTicketMock.mockResolvedValue("Summary.");
+
+    await send(makeApp(Role.agent), "POST", "/tickets/103/summary");
+
+    expect(summarizeTicketMock).toHaveBeenCalledWith(
+      expect.objectContaining({ requesterName: null }),
+    );
+  });
+
+  test("persists nothing — the summary is regenerated per request", async () => {
+    prismaMock.ticket.findUnique.mockResolvedValue(summaryTicket());
+    prismaMock.ticketReply.findMany.mockResolvedValue([]);
+    summarizeTicketMock.mockResolvedValue("Summary.");
+
+    await send(makeApp(Role.agent), "POST", "/tickets/103/summary");
+
+    expect(prismaMock.ticket.update).not.toHaveBeenCalled();
+    expect(prismaMock.ticketReply.create).not.toHaveBeenCalled();
+  });
+
+  test("404s for an unknown ticket without calling the model", async () => {
+    prismaMock.ticket.findUnique.mockResolvedValue(null);
+
+    const res = await send(makeApp(Role.agent), "POST", "/tickets/ghost/summary");
+
+    expect(res.status).toBe(404);
+    expect(summarizeTicketMock).not.toHaveBeenCalled();
+    expect(prismaMock.ticketReply.findMany).not.toHaveBeenCalled();
+  });
+
+  test("502s with a JSON error when the model call fails", async () => {
+    prismaMock.ticket.findUnique.mockResolvedValue(summaryTicket());
+    prismaMock.ticketReply.findMany.mockResolvedValue([]);
+    summarizeTicketMock.mockRejectedValue(new Error("upstream is down"));
+
+    const res = await send(makeApp(Role.agent), "POST", "/tickets/103/summary");
+
+    // A JSON body (not Express's HTML 500) is what lets ErrorAlert show a message.
     expect(res.status).toBe(502);
     expect(res.body.error).toBeString();
   });

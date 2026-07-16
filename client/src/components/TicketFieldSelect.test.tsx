@@ -34,7 +34,7 @@ const statusOptions = [
 function renderStatus() {
   return renderWithQuery(
     <TicketFieldSelect
-      ticketId="t-1"
+      ticketId={103}
       value="open"
       ariaLabel="Update status"
       options={statusOptions}
@@ -72,7 +72,7 @@ describe("TicketFieldSelect", () => {
     await u.click(await screen.findByRole("option", { name: "Resolved" }));
 
     await waitFor(() =>
-      expect(mockedAxios.patch).toHaveBeenCalledWith("/api/tickets/t-1", {
+      expect(mockedAxios.patch).toHaveBeenCalledWith("/api/tickets/103", {
         status: "resolved",
       }),
     );

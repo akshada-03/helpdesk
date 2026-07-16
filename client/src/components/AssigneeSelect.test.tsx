@@ -47,7 +47,7 @@ function mockAssignSuccess(assignee: TicketAssignee | null) {
 
 function renderSelect(assignee: TicketAssignee | null = null) {
   return renderWithQuery(
-    <AssigneeSelect ticketId="t-1" assignee={assignee} />,
+    <AssigneeSelect ticketId={103} assignee={assignee} />,
   );
 }
 
@@ -99,7 +99,7 @@ describe("AssigneeSelect", () => {
     await u.click(await screen.findByRole("option", { name: "Bob Agent" }));
 
     await waitFor(() =>
-      expect(mockedAxios.patch).toHaveBeenCalledWith("/api/tickets/t-1", {
+      expect(mockedAxios.patch).toHaveBeenCalledWith("/api/tickets/103", {
         assigneeId: "u-2",
       }),
     );
@@ -117,7 +117,7 @@ describe("AssigneeSelect", () => {
     await u.click(await screen.findByRole("option", { name: "Unassigned" }));
 
     await waitFor(() =>
-      expect(mockedAxios.patch).toHaveBeenCalledWith("/api/tickets/t-1", {
+      expect(mockedAxios.patch).toHaveBeenCalledWith("/api/tickets/103", {
         assigneeId: null,
       }),
     );

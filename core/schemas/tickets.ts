@@ -56,7 +56,11 @@ export type TicketAssignee = {
 // an ISO string over JSON. `category` is null until AI classification runs.
 // `assignee` is null until an agent is assigned.
 export type TicketListItem = {
-  id: string;
+  // Auto-incrementing integer assigned by the database — this is the ticket number
+  // agents refer to. Note it is NOT a string: it goes into URLs (/tickets/12) and
+  // comes back off the wire as a JSON number, so client code that reads it from a
+  // route param must parse it.
+  id: number;
   subject: string;
   requesterEmail: string;
   requesterName: string | null;
@@ -83,7 +87,8 @@ export type TicketListResponse = {
 // only emails); it is untrusted markup and must be DOMPurify-sanitized before the
 // client renders it.
 export type TicketDetail = {
-  id: string;
+  // See TicketListItem.id — an integer ticket number, not a string.
+  id: number;
   subject: string;
   body: string;
   bodyHtml: string | null;
@@ -126,7 +131,8 @@ export type ReplyAuthor = {
 // and POST /api/tickets/:id/replies. `createdAt` is serialized to an ISO string
 // over JSON. `author` is null when the authoring user has been hard-deleted.
 export type TicketReply = {
-  // Auto-incrementing integer PK (unlike Ticket's string id).
+  // Auto-incrementing integer PK, like the ticket's own id. Only unique across
+  // replies, not scoped per ticket.
   id: number;
   body: string;
   // Original HTML body when the reply carried an HTML part (customer replies from
@@ -161,4 +167,16 @@ export type PolishReplyInput = z.infer<typeof polishReplySchema>;
 // and edit before sending.
 export type PolishReplyResponse = {
   body: string;
+};
+
+// Response from POST /api/tickets/:id/summary — an AI summary of the ticket and its
+// reply thread, for the agent working it. The request has no body: everything the
+// summary covers is already server-side, so the client sends only the ticket id.
+//
+// Nothing is persisted and nothing is cached — each request regenerates against the
+// thread as it stands, so a summary can never describe a conversation that has since
+// moved on. It's a POST rather than a GET for that reason: the call is expensive and
+// non-idempotent-in-cost, and it must never be replayed from an HTTP cache.
+export type SummarizeTicketResponse = {
+  summary: string;
 };

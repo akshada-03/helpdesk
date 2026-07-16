@@ -51,18 +51,18 @@ describe("TicketReplies", () => {
 
   it("fetches and renders the reply thread", async () => {
     mockedAxios.get.mockResolvedValue({ data: [reply] } as AxiosResponse);
-    renderWithQuery(<TicketReplies ticketId="t-1" />);
+    renderWithQuery(<TicketReplies ticketId={103} />);
 
     expect(await screen.findByText(reply.body)).toBeInTheDocument();
     expect(screen.getByText("Alice Agent")).toBeInTheDocument();
-    expect(mockedAxios.get).toHaveBeenCalledWith("/api/tickets/t-1/replies");
+    expect(mockedAxios.get).toHaveBeenCalledWith("/api/tickets/103/replies");
   });
 
   it("labels agent and customer replies distinctly", async () => {
     mockedAxios.get.mockResolvedValue({
       data: [reply, customerReply],
     } as AxiosResponse);
-    renderWithQuery(<TicketReplies ticketId="t-1" />);
+    renderWithQuery(<TicketReplies ticketId={103} />);
 
     await screen.findByText(reply.body);
     // Agent reply carries the author's name + an "Agent" badge; the customer
@@ -83,7 +83,7 @@ describe("TicketReplies", () => {
         },
       ],
     } as AxiosResponse);
-    renderWithQuery(<TicketReplies ticketId="t-1" />);
+    renderWithQuery(<TicketReplies ticketId={103} />);
 
     // The safe formatting survives…
     const strong = await screen.findByText("this");
@@ -97,14 +97,14 @@ describe("TicketReplies", () => {
 
   it("shows an empty state when there are no replies", async () => {
     mockedAxios.get.mockResolvedValue({ data: [] } as AxiosResponse);
-    renderWithQuery(<TicketReplies ticketId="t-1" />);
+    renderWithQuery(<TicketReplies ticketId={103} />);
 
     expect(await screen.findByText("No replies yet.")).toBeInTheDocument();
   });
 
   it("shows an error alert when the thread fails to load", async () => {
     mockedAxios.get.mockRejectedValue({});
-    renderWithQuery(<TicketReplies ticketId="t-1" />);
+    renderWithQuery(<TicketReplies ticketId={103} />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Failed to load replies.",
@@ -114,7 +114,7 @@ describe("TicketReplies", () => {
   it("disables send until there is a reply, rather than validating on submit", async () => {
     mockedAxios.get.mockResolvedValue({ data: [] } as AxiosResponse);
     const u = userEvent.setup();
-    renderWithQuery(<TicketReplies ticketId="t-1" />);
+    renderWithQuery(<TicketReplies ticketId={103} />);
 
     await screen.findByText("No replies yet.");
     const send = screen.getByRole("button", { name: /send reply/i });
@@ -137,7 +137,7 @@ describe("TicketReplies", () => {
   it("keeps send disabled for a whitespace-only draft", async () => {
     mockedAxios.get.mockResolvedValue({ data: [] } as AxiosResponse);
     const u = userEvent.setup();
-    renderWithQuery(<TicketReplies ticketId="t-1" />);
+    renderWithQuery(<TicketReplies ticketId={103} />);
 
     await screen.findByText("No replies yet.");
     // The schema trims before checking, so spaces alone must not count as a reply.
@@ -154,7 +154,7 @@ describe("TicketReplies", () => {
       .mockResolvedValue({ data: [reply] } as AxiosResponse);
     mockedAxios.post.mockResolvedValue({ data: reply } as AxiosResponse);
     const u = userEvent.setup();
-    renderWithQuery(<TicketReplies ticketId="t-1" />);
+    renderWithQuery(<TicketReplies ticketId={103} />);
 
     await screen.findByText("No replies yet.");
     const box = screen.getByRole("textbox", { name: "Reply message" });
@@ -162,7 +162,7 @@ describe("TicketReplies", () => {
     await u.click(screen.getByRole("button", { name: /send reply/i }));
 
     await waitFor(() =>
-      expect(mockedAxios.post).toHaveBeenCalledWith("/api/tickets/t-1/replies", {
+      expect(mockedAxios.post).toHaveBeenCalledWith("/api/tickets/103/replies", {
         body: "Here is my reply",
       }),
     );
@@ -175,7 +175,7 @@ describe("TicketReplies", () => {
     mockedAxios.get.mockResolvedValue({ data: [] } as AxiosResponse);
     mockedAxios.post.mockRejectedValue({});
     const u = userEvent.setup();
-    renderWithQuery(<TicketReplies ticketId="t-1" />);
+    renderWithQuery(<TicketReplies ticketId={103} />);
 
     await screen.findByText("No replies yet.");
     await u.type(
@@ -195,7 +195,7 @@ describe("TicketReplies", () => {
     async function composeDraft(draft: string) {
       mockedAxios.get.mockResolvedValue({ data: [] } as AxiosResponse);
       const u = userEvent.setup();
-      renderWithQuery(<TicketReplies ticketId="t-1" />);
+      renderWithQuery(<TicketReplies ticketId={103} />);
 
       await screen.findByText("No replies yet.");
       const box = screen.getByRole("textbox", { name: "Reply message" });
@@ -205,7 +205,7 @@ describe("TicketReplies", () => {
 
     it("is disabled until there is a draft to polish", async () => {
       mockedAxios.get.mockResolvedValue({ data: [] } as AxiosResponse);
-      renderWithQuery(<TicketReplies ticketId="t-1" />);
+      renderWithQuery(<TicketReplies ticketId={103} />);
 
       await screen.findByText("No replies yet.");
       expect(screen.getByRole("button", { name: /polish/i })).toBeDisabled();
@@ -225,7 +225,7 @@ describe("TicketReplies", () => {
       // Polishing hits only the polish endpoint — the reply is NOT posted.
       expect(mockedAxios.post).toHaveBeenCalledTimes(1);
       expect(mockedAxios.post).toHaveBeenCalledWith(
-        "/api/tickets/t-1/replies/polish",
+        "/api/tickets/103/replies/polish",
         { body: "we r on it" },
       );
     });
@@ -246,7 +246,7 @@ describe("TicketReplies", () => {
 
       await waitFor(() =>
         expect(mockedAxios.post).toHaveBeenLastCalledWith(
-          "/api/tickets/t-1/replies",
+          "/api/tickets/103/replies",
           { body: "Polished text." },
         ),
       );

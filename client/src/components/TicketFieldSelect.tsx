@@ -27,7 +27,7 @@ export default function TicketFieldSelect({
   buildPatch,
   placeholder,
 }: {
-  ticketId: string;
+  ticketId: number;
   value: string;
   options: { value: string; label: string }[];
   ariaLabel: string;

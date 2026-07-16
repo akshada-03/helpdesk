@@ -1,6 +1,8 @@
 import { generateText } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 
+import type { ReplySenderType } from "core/constants/ticket.ts";
+
 import { AI_API_KEY, AI_BASE_URL, AI_MODEL } from "./env";
 
 // Model access for the app's AI features, via the Vercel AI SDK.
@@ -41,6 +43,107 @@ function model() {
 function firstName(fullName: string | null): string | null {
   const first = fullName?.trim().split(/\s+/)[0];
   return first ? first : null;
+}
+
+// Instructions for the ticket summarizer. Agents read a summary to get back up to
+// speed on a thread they may not have worked, so the rules pull hard against the
+// two failure modes that would make it untrustworthy: inventing a resolution that
+// never happened, and burying the current state under a retelling of every message.
+//
+// The summary is read-only context, never sent to the customer, so it addresses the
+// agent about the conversation rather than participating in it — hence no greeting,
+// no sign-off, and third-person references to both sides.
+const SUMMARY_SYSTEM_PROMPT = `You are an assistant for customer support agents. \
+Summarize a support ticket and its conversation history so an agent can catch up at \
+a glance.
+
+Rules:
+- Summarize only what is in the ticket and replies. Never invent facts, promises, \
+causes, or outcomes that are not stated.
+- Lead with the customer's core problem or request in one sentence.
+- Then cover what has happened since: what the agents asked or advised, what the \
+customer answered, and anything still outstanding.
+- Make the current state explicit — whether the issue looks resolved, is waiting on \
+the customer, or is waiting on the team. If the conversation does not say, write \
+that it is unclear rather than guessing.
+- Be brief and factual: at most one short paragraph, or a few terse bullet points \
+if there are distinct threads. Do not restate every message in order.
+- Write about the customer and the agents in the third person. This is an internal \
+note for an agent, not a message to the customer.
+- Refer to people by name or by role ("the customer", "the agent"). Never infer \
+anyone's gender from their name: do not use "he" or "she" unless the conversation \
+itself states which to use. Where a pronoun is unavoidable, use "they".
+- Do not add a greeting, a sign-off, a title, or any preamble such as "Here is a \
+summary". Return ONLY the summary text.
+- Match the language of the ticket.`;
+
+// One message in a ticket's conversation, as handed to the summarizer. Only the
+// fields the prompt actually uses — the caller projects a reply row down to this.
+export type SummaryReply = {
+  senderType: ReplySenderType;
+  authorName: string | null;
+  body: string;
+};
+
+// Renders the thread as labelled, chronological turns for the prompt. Each turn is
+// attributed to "Customer" or the named agent, since who said what is exactly the
+// thing a summary has to get right — an agent's own suggestion misread as the
+// customer's report would invert the ticket's meaning.
+//
+// Empty threads never reach here (the caller substitutes its own text), so this
+// always renders at least one turn.
+function formatThread(replies: SummaryReply[]): string {
+  return replies
+    .map((reply) => {
+      const who =
+        reply.senderType === "agent"
+          ? `Agent${reply.authorName ? ` (${reply.authorName})` : ""}`
+          : "Customer";
+      return `${who}:\n${reply.body}`;
+    })
+    .join("\n\n");
+}
+
+// Summarizes a ticket and its conversation history for the agent working it.
+// Nothing is persisted: the caller regenerates on demand, so the summary always
+// reflects the thread as it stands rather than a stale snapshot.
+//
+// The inbound message is passed separately from `replies` because it is the ticket
+// itself, not a turn in the thread — the model is told to lead with the problem it
+// describes. A ticket with no replies yet is still summarizable (it collapses to
+// "summarize this message"), so an empty thread is normal rather than an error.
+//
+// Throws if the model call fails or comes back empty — callers surface that as a
+// 502 rather than showing the agent a blank summary.
+export async function summarizeTicket(input: {
+  subject: string;
+  ticketBody: string;
+  requesterName: string | null;
+  replies: SummaryReply[];
+}): Promise<string> {
+  const { text } = await generateText({
+    model: model(),
+    system: SUMMARY_SYSTEM_PROMPT,
+    prompt: `Support ticket subject: ${input.subject}
+
+Customer's name: ${input.requesterName ?? "(unknown)"}
+
+The customer's original message:
+${input.ticketBody}
+
+The conversation since (oldest first):
+${
+  input.replies.length > 0
+    ? formatThread(input.replies)
+    : "(no replies yet — nobody has responded to the customer)"
+}`,
+  });
+
+  const summary = text.trim();
+  if (!summary) {
+    throw new Error("Model returned an empty summary");
+  }
+  return summary;
 }
 
 // Instructions for the reply polisher. The draft is the agent's own words, so the

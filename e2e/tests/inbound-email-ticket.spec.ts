@@ -43,9 +43,11 @@ test.describe("Inbound email to ticket", () => {
 
     expect(webhookResponse.status()).toBe(200);
     const { ticketId } = (await webhookResponse.json()) as {
-      ticketId: string;
+      ticketId: number;
     };
-    expect(ticketId).toBeTruthy();
+    // Ids are positive autoincrement integers — assert that rather than mere
+    // truthiness, which a number would pass for any non-zero value.
+    expect(ticketId).toBeGreaterThan(0);
 
     // 2. Log in as admin so the browser context holds the session cookie, then
     //    read the ticket list through the authenticated API.
@@ -56,7 +58,7 @@ test.describe("Inbound email to ticket", () => {
 
     const { tickets } = (await listResponse.json()) as {
       tickets: Array<{
-        id: string;
+        id: number;
         subject: string;
         requesterEmail: string;
         requesterName: string | null;

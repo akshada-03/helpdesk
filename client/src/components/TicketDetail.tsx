@@ -8,6 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import TicketSummary from "@/components/TicketSummary";
 
 // A single labelled field in the metadata grid.
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -19,10 +20,11 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-// The read-only summary of an inbound ticket — subject, who it's from, the message
-// body, and the created/updated timestamps. Purely presentational: it renders the
-// already-loaded ticket; the editable controls and reply thread live in their own
-// components.
+// The read-only view of an inbound ticket — subject, who it's from, the message
+// body, and the created/updated timestamps. It renders the already-loaded ticket
+// rather than fetching one; the editable controls and reply thread live in their own
+// components. The one non-presentational piece is the AI summary below the message,
+// which owns its own on-demand request (see TicketSummary).
 export default function TicketDetail({ ticket }: { ticket: TicketDetailData }) {
   // When the inbound email carried an HTML part, render it (sanitized) so the
   // original formatting survives; otherwise fall back to the plain-text body.
@@ -65,6 +67,11 @@ export default function TicketDetail({ ticket }: { ticket: TicketDetailData }) {
             <p className="text-sm whitespace-pre-wrap">{ticket.body}</p>
           )}
         </div>
+
+        {/* Summarizes this message *and* the reply thread, so it sits below the
+            message rather than inside it — the thread it covers renders further
+            down the page (TicketReplies), and the server reads that thread itself. */}
+        <TicketSummary ticketId={ticket.id} />
 
         <dl className="grid grid-cols-2 gap-4">
           <Field label="Created">

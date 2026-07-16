@@ -6,6 +6,7 @@ import {
   polishReplySchema,
   ticketListQuerySchema,
   type PolishReplyResponse,
+  type SummarizeTicketResponse,
   type TicketDetail,
   type TicketListItem,
   type TicketListResponse,
@@ -15,8 +16,12 @@ import {
 
 import prisma from "../db";
 import type { Prisma } from "../generated/prisma/client";
-import { polishReply } from "../lib/ai";
+import { polishReply, summarizeTicket } from "../lib/ai";
+import { parseId } from "../lib/parse-id";
 import { validate } from "../lib/validate";
+
+// Every `/:id` handler starts by parsing the param, so they share one message.
+const TICKET_NOT_FOUND = "Ticket not found";
 
 export const ticketsRouter = Router();
 
@@ -157,17 +162,20 @@ ticketsRouter.get("/", async (req, res) => {
   res.json(body);
 });
 
-// Single ticket detail. Ids are opaque string UUIDs (not numeric), so there's no
-// parseId step — an unknown id simply misses and 404s. Returns the full record,
-// including the message body and updatedAt, on top of the list fields.
+// Single ticket detail. The id is an integer, so it's parsed via parseId — a
+// non-numeric id can't name a ticket and 404s without hitting the DB. Returns the
+// full record, including the message body and updatedAt, on top of the list fields.
 ticketsRouter.get("/:id", async (req, res) => {
+  const id = parseId(req.params.id, res, TICKET_NOT_FOUND);
+  if (id === null) return;
+
   const ticket = await prisma.ticket.findUnique({
-    where: { id: req.params.id },
+    where: { id },
     select: detailSelect,
   });
 
   if (!ticket) {
-    res.status(404).json({ error: "Ticket not found" });
+    res.status(404).json({ error: TICKET_NOT_FOUND });
     return;
   }
 
@@ -185,7 +193,8 @@ ticketsRouter.patch("/:id", async (req, res) => {
   const data = validate(updateTicketSchema, req.body, res);
   if (!data) return;
 
-  const { id } = req.params;
+  const id = parseId(req.params.id, res, TICKET_NOT_FOUND);
+  if (id === null) return;
 
   // Assignment is admin-only: reject a non-admin that tries to (re)assign, even
   // though status/category edits are open to agents.
@@ -236,22 +245,83 @@ ticketsRouter.patch("/:id", async (req, res) => {
 // ticket doesn't exist so the client can distinguish "no such ticket" from an
 // empty thread.
 ticketsRouter.get("/:id/replies", async (req, res) => {
+  const id = parseId(req.params.id, res, TICKET_NOT_FOUND);
+  if (id === null) return;
+
   const ticket = await prisma.ticket.findUnique({
-    where: { id: req.params.id },
+    where: { id },
     select: { id: true },
   });
   if (!ticket) {
-    res.status(404).json({ error: "Ticket not found" });
+    res.status(404).json({ error: TICKET_NOT_FOUND });
     return;
   }
 
   const replies = await prisma.ticketReply.findMany({
-    where: { ticketId: req.params.id },
+    where: { ticketId: id },
     select: replySelect,
     orderBy: { createdAt: "asc" },
   });
 
   res.json(replies.map(toTicketReply));
+});
+
+// Summarize a ticket and its conversation history for the agent working it. Takes
+// no request body: the ticket id in the path is the whole input, and the message and
+// thread are read server-side rather than trusted from the client.
+//
+// Nothing is persisted and nothing is cached — every call regenerates from the
+// current thread, so the summary can't lag behind a conversation that has moved on
+// (a stale summary is worse than none, since the agent would act on it).
+//
+// Like the polish route, this try/catches against the usual convention: a failing
+// model call is an expected upstream failure (outage, rate limit, missing key), and
+// letting it throw would return an HTML 500 that ErrorAlert can't read a message
+// from. The ticket and thread are on screen regardless, so a clean 502 just means
+// the agent reads it themselves.
+ticketsRouter.post("/:id/summary", async (req, res) => {
+  const id = parseId(req.params.id, res, TICKET_NOT_FOUND);
+  if (id === null) return;
+
+  const ticket = await prisma.ticket.findUnique({
+    where: { id },
+    select: { subject: true, body: true, requesterName: true },
+  });
+  if (!ticket) {
+    res.status(404).json({ error: TICKET_NOT_FOUND });
+    return;
+  }
+
+  // Oldest first, matching GET /:id/replies — the summarizer is told the thread is
+  // chronological, so the order it arrives in is load-bearing.
+  const replies = await prisma.ticketReply.findMany({
+    where: { ticketId: id },
+    select: { senderType: true, body: true, author: { select: { name: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+
+  let summary: string;
+  try {
+    summary = await summarizeTicket({
+      subject: ticket.subject,
+      ticketBody: ticket.body,
+      requesterName: ticket.requesterName,
+      replies: replies.map((reply) => ({
+        senderType: reply.senderType,
+        body: reply.body,
+        // Null for customer replies (no app User) and for agent replies whose
+        // author was since hard-deleted; the prompt labels those "Agent" alone.
+        authorName: reply.author?.name ?? null,
+      })),
+    });
+  } catch (error) {
+    console.error("Failed to summarize ticket:", error);
+    res.status(502).json({ error: "Could not summarize the ticket. Try again." });
+    return;
+  }
+
+  const body: SummarizeTicketResponse = { summary };
+  res.json(body);
 });
 
 // Rewrite an agent's draft reply via GPT and hand it back. Nothing is persisted —
@@ -268,15 +338,18 @@ ticketsRouter.post("/:id/replies/polish", async (req, res) => {
   const data = validate(polishReplySchema, req.body, res);
   if (!data) return;
 
+  const id = parseId(req.params.id, res, TICKET_NOT_FOUND);
+  if (id === null) return;
+
   // The rewrite is grounded in the ticket, so load the message alongside the
   // existence check the other reply routes do. requesterName is nullable (inbound
   // email often carries no name) — polishReply falls back to a neutral greeting.
   const ticket = await prisma.ticket.findUnique({
-    where: { id: req.params.id },
+    where: { id },
     select: { subject: true, body: true, requesterName: true },
   });
   if (!ticket) {
-    res.status(404).json({ error: "Ticket not found" });
+    res.status(404).json({ error: TICKET_NOT_FOUND });
     return;
   }
 
@@ -309,19 +382,22 @@ ticketsRouter.post("/:id/replies", async (req, res) => {
   const data = validate(createReplySchema, req.body, res);
   if (!data) return;
 
+  const id = parseId(req.params.id, res, TICKET_NOT_FOUND);
+  if (id === null) return;
+
   const ticket = await prisma.ticket.findUnique({
-    where: { id: req.params.id },
+    where: { id },
     select: { id: true },
   });
   if (!ticket) {
-    res.status(404).json({ error: "Ticket not found" });
+    res.status(404).json({ error: TICKET_NOT_FOUND });
     return;
   }
 
   const reply = await prisma.ticketReply.create({
     data: {
       // id is an auto-incrementing integer — the DB assigns it.
-      ticketId: req.params.id,
+      ticketId: id,
       body: data.body,
       // Posted through the authenticated agent UI, so the sender is always an
       // agent; customer replies are ingested elsewhere (e.g. inbound email).

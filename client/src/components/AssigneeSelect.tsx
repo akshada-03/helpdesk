@@ -30,7 +30,7 @@ export default function AssigneeSelect({
   ticketId,
   assignee,
 }: {
-  ticketId: string;
+  ticketId: number;
   assignee: TicketAssignee | null;
 }) {
   const queryClient = useQueryClient();

@@ -39,7 +39,7 @@ vi.mock("axios", () => {
 const mockedAxios = vi.mocked(axios, { deep: true });
 
 const ticket: TicketDetailData = {
-  id: "t-1",
+  id: 103,
   subject: "Cannot log in",
   body: "I keep getting an error when I try to sign in.",
   bodyHtml: null,
