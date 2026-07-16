@@ -2,6 +2,8 @@ import { Router } from "express";
 import multer from "multer";
 
 import prisma from "../db";
+import { isAiConfigured } from "../lib/ai";
+import { sendClassifyTicketJob } from "../lib/queue";
 import { WEBHOOK_SECRET } from "../lib/env";
 import {
   inboundEmailSchema,
@@ -35,6 +37,15 @@ webhooksRouter.post("/inbound-email", upload.none(), async (req, res) => {
       // status defaults to `open`; category is left null until AI classification.
     },
   });
+
+  // Enqueue background classification, but only when AI is configured — an
+  // unconfigured server would otherwise queue jobs that can only fail. Enqueuing is
+  // a quick, durable DB insert that never throws (see sendClassifyTicketJob), so we
+  // await it before responding: the job is committed before the email is
+  // acknowledged, and a worker picks it up off the request path.
+  if (isAiConfigured()) {
+    await sendClassifyTicketJob(ticket.id);
+  }
 
   // SendGrid treats any 2xx as successful delivery; a non-2xx triggers retries.
   res.status(200).json({ ticketId: ticket.id });

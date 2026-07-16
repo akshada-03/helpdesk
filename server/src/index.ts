@@ -3,6 +3,7 @@ import cors from "cors";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth";
 import { CLIENT_URL } from "./lib/env";
+import { startQueue, stopQueue } from "./lib/queue";
 import { apiRouter } from "./routes";
 
 const app = express();
@@ -23,6 +24,30 @@ app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });
 });
 
-app.listen(PORT, () => {
-  console.log(`API server listening on http://localhost:${PORT}`);
+// Start background infrastructure before accepting traffic, then listen. The queue
+// must be up first so any classification enqueued by an early inbound webhook has a
+// worker to run it. A failure here is fatal — the app can't function without its DB.
+async function boot() {
+  await startQueue();
+
+  const server = app.listen(PORT, () => {
+    console.log(`API server listening on http://localhost:${PORT}`);
+  });
+
+  // Graceful shutdown: stop taking new connections and let in-flight jobs drain
+  // before the process exits, so a deploy/restart doesn't kill a job mid-run.
+  async function shutdown(signal: string) {
+    console.log(`\n${signal} received — shutting down.`);
+    server.close();
+    await stopQueue();
+    process.exit(0);
+  }
+
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+  process.on("SIGINT", () => void shutdown("SIGINT"));
+}
+
+boot().catch((error) => {
+  console.error("Failed to start server:", error);
+  process.exit(1);
 });

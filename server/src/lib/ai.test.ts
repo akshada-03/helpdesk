@@ -35,7 +35,7 @@ function setEnv(overrides: Partial<AiEnv> = {}) {
 
 setEnv();
 
-const { polishReply } = await import("./ai");
+const { polishReply, classifyTicket } = await import("./ai");
 
 // A complete set of inputs; individual tests override just what they exercise.
 const baseInput = {
@@ -200,5 +200,75 @@ describe("polishReply", () => {
       expect(polishReply(baseInput)).rejects.toThrow("AI is not configured");
       expect(generateTextMock).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("classifyTicket", () => {
+  const ticket = {
+    subject: "Refund for double charge",
+    body: "I was billed twice this month and want one charge refunded.",
+  };
+
+  test("returns the category the model names", async () => {
+    generateTextMock.mockResolvedValue({ text: "refund_request" });
+
+    expect(await classifyTicket(ticket)).toBe("refund_request");
+  });
+
+  test("sends the subject and body as context", async () => {
+    generateTextMock.mockResolvedValue({ text: "refund_request" });
+    await classifyTicket(ticket);
+
+    const prompt = lastPrompt();
+    expect(prompt).toContain("Refund for double charge");
+    expect(prompt).toContain("I was billed twice this month");
+  });
+
+  test("uses the configured model", async () => {
+    generateTextMock.mockResolvedValue({ text: "general_question" });
+    await classifyTicket(ticket);
+
+    expect(generateTextMock.mock.calls[0][0].model.modelId).toBe("test-model");
+  });
+
+  test("forgives surrounding whitespace and capitalization", async () => {
+    generateTextMock.mockResolvedValue({ text: "  Technical_Question\n" });
+
+    expect(await classifyTicket(ticket)).toBe("technical_question");
+  });
+
+  test("recovers a known category from a wrapped answer", async () => {
+    // The model ignored "identifier only" and wrapped it — the exact identifier is
+    // still in there, so we should extract it rather than discard a correct answer.
+    generateTextMock.mockResolvedValue({
+      text: "Category: refund_request.",
+    });
+
+    expect(await classifyTicket(ticket)).toBe("refund_request");
+  });
+
+  test("throws when the answer is not a known category", async () => {
+    generateTextMock.mockResolvedValue({ text: "billing_dispute" });
+
+    expect(classifyTicket(ticket)).rejects.toThrow("unrecognized category");
+  });
+
+  test("throws on empty output rather than guessing a category", async () => {
+    generateTextMock.mockResolvedValue({ text: "" });
+
+    expect(classifyTicket(ticket)).rejects.toThrow("unrecognized category");
+  });
+
+  test("propagates a failed model call", async () => {
+    generateTextMock.mockRejectedValue(new Error("upstream is down"));
+
+    expect(classifyTicket(ticket)).rejects.toThrow("upstream is down");
+  });
+
+  test("throws a configuration error when AI is unset", async () => {
+    setEnv({ AI_API_KEY: undefined });
+
+    expect(classifyTicket(ticket)).rejects.toThrow("AI is not configured");
+    expect(generateTextMock).not.toHaveBeenCalled();
   });
 });

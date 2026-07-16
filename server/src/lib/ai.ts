@@ -1,7 +1,12 @@
 import { generateText } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { z } from "zod/v4";
 
-import type { ReplySenderType } from "core/constants/ticket.ts";
+import {
+  ticketCategories,
+  type ReplySenderType,
+  type TicketCategory,
+} from "core/constants/ticket.ts";
 
 import { AI_API_KEY, AI_BASE_URL, AI_MODEL } from "./env";
 
@@ -16,7 +21,16 @@ import { AI_API_KEY, AI_BASE_URL, AI_MODEL } from "./env";
 // Built lazily: constructing the provider reads the env vars, and doing that at
 // import time would make an unconfigured server fail to boot even for the routes
 // that never touch AI (and would break the tests, which stub this module).
+// Whether the AI env vars are all set. Callers use this to decide whether to invoke
+// an AI feature at all — e.g. the webhook only enqueues classification when AI is
+// configured, so an unconfigured server doesn't queue jobs that can only fail.
+export function isAiConfigured(): boolean {
+  return Boolean(AI_BASE_URL && AI_API_KEY && AI_MODEL);
+}
+
 function model() {
+  // Re-checked inline (rather than via isAiConfigured) so TypeScript narrows the
+  // three vars from `string | undefined` to `string` for the calls below.
   if (!AI_BASE_URL || !AI_API_KEY || !AI_MODEL) {
     throw new Error(
       "AI is not configured — set AI_BASE_URL, AI_API_KEY, and AI_MODEL in server/.env",
@@ -43,6 +57,78 @@ function model() {
 function firstName(fullName: string | null): string | null {
   const first = fullName?.trim().split(/\s+/)[0];
   return first ? first : null;
+}
+
+// Instructions for the ticket classifier. Each category is described by intent
+// rather than keyword so the model routes on what the customer wants, not on
+// surface words ("refund" appears in plenty of non-refund questions). The default
+// is called out explicitly: an ambiguous ticket should land in general_question
+// rather than being forced into a technical or refund bucket it doesn't belong in.
+//
+// The model is told to answer with the bare identifier because the output is fed
+// straight into an enum column after validation — any prose would just be noise to
+// strip.
+const CLASSIFY_SYSTEM_PROMPT = `You classify an inbound customer support ticket \
+into exactly one category.
+
+Categories:
+- general_question — a general inquiry, account or how-to question, feedback, or \
+anything that is not a technical problem or a refund. Use this as the default when \
+the ticket is unclear or fits none of the others well.
+- technical_question — a bug, error, outage, broken feature, or anything not \
+working that needs technical troubleshooting.
+- refund_request — the customer wants their money back, a cancellation with a \
+refund, or is disputing a charge.
+
+Rules:
+- Pick the single category that best matches the customer's primary intent.
+- Respond with ONLY the exact identifier — general_question, technical_question, or \
+refund_request — in lower snake_case. No punctuation, quotes, explanation, or any \
+other words.`;
+
+// The model's answer is untrusted text, so validate it against the real category
+// set before it ever reaches the enum column (per project convention: Zod for any
+// external/untrusted data).
+const categorySchema = z.enum(ticketCategories);
+
+// Classifies an inbound ticket into one of the fixed TicketCategory values from its
+// subject and body. Used to auto-fill `category` on tickets created from inbound
+// email; the caller runs it in the background (see lib/classify.ts), so this just
+// does the model call and validation.
+//
+// Throws if the model call fails or returns something that isn't a known category —
+// the caller logs and moves on, leaving the ticket unclassified rather than writing
+// a bogus value.
+export async function classifyTicket(input: {
+  subject: string;
+  body: string;
+}): Promise<TicketCategory> {
+  const { text } = await generateText({
+    model: model(),
+    system: CLASSIFY_SYSTEM_PROMPT,
+    prompt: `Subject: ${input.subject}
+
+Message:
+${input.body}`,
+  });
+
+  // Prefer an exact match on the normalized answer; the categories are already
+  // lowercase, so this just forgives stray whitespace or capitalization.
+  const normalized = text.trim().toLowerCase();
+  const exact = categorySchema.safeParse(normalized);
+  if (exact.success) return exact.data;
+
+  // Fall back to finding a known identifier inside a wrapped answer (e.g. the model
+  // returned "Category: refund_request." despite the instruction). Only rescues an
+  // otherwise-correct answer; genuinely unrecognized output still throws.
+  const found = ticketCategories.find((category) =>
+    normalized.includes(category),
+  );
+  if (found) return found;
+
+  throw new Error(
+    `Model returned an unrecognized category: ${JSON.stringify(text)}`,
+  );
 }
 
 // Instructions for the ticket summarizer. Agents read a summary to get back up to
