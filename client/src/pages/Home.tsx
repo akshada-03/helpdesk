@@ -2,9 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 
 import type { TicketStatsResponse } from "core/schemas/tickets.ts";
 import { api } from "@/lib/api";
+import { useSession } from "@/lib/auth-client";
 import Navbar from "@/components/Navbar";
 import ErrorAlert from "@/components/ErrorAlert";
-import TicketsPerDayChart from "@/components/TicketsPerDayChart";
 import {
   Card,
   CardContent,
@@ -12,6 +12,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+
+type Health = { status: string; timestamp: string };
 
 // Formats a duration in milliseconds as a compact human string (e.g. "2h 15m",
 // "45m", "30s"). Only the two most significant units are shown.
@@ -59,17 +61,29 @@ function StatCard({
 }
 
 export default function Home() {
+  const { data: session } = useSession();
+
   const stats = useQuery({
     queryKey: ["ticket-stats"],
     queryFn: async () =>
       (await api.get<TicketStatsResponse>("/api/tickets/stats")).data,
   });
 
+  const health = useQuery({
+    queryKey: ["health"],
+    queryFn: async () => (await api.get<Health>("/api/health")).data,
+  });
+
   return (
     <div className="min-h-svh">
       <Navbar />
       <main className="mx-auto max-w-5xl px-4 py-8">
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
+        <h1 className="text-2xl font-semibold">
+          Dashboard 
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          Ticket volume and AI auto-resolution performance.
+        </p>
 
         {stats.isError && (
           <ErrorAlert
@@ -123,21 +137,26 @@ export default function Home() {
           )}
         </div>
 
-        {stats.isPending && (
-          <Card className="mt-4">
-            <CardContent className="pt-6">
-              <Skeleton className="h-40 w-full" />
-            </CardContent>
-          </Card>
-        )}
-
-        {stats.isSuccess && (
-          <Card className="mt-4">
-            <CardContent className="pt-6">
-              <TicketsPerDayChart data={stats.data.daily} />
-            </CardContent>
-          </Card>
-        )}
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>API status</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {health.isPending && <Skeleton className="h-5 w-72" />}
+            {health.isError && (
+              <ErrorAlert
+                error={health.error}
+                fallback="Could not reach the API."
+              />
+            )}
+            {health.isSuccess && (
+              <span className="text-sm">
+                ✓ API is healthy (status: {health.data.status}, checked{" "}
+                {new Date(health.data.timestamp).toLocaleTimeString()})
+              </span>
+            )}
+          </CardContent>
+        </Card>
       </main>
     </div>
   );
