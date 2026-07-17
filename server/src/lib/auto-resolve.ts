@@ -1,4 +1,5 @@
 import prisma from "../db";
+import { AI_AGENT_ID } from "./ai-agent";
 import { autoResolveTicket } from "./ai";
 import { loadKnowledgeBase } from "./knowledge-base";
 
@@ -58,17 +59,20 @@ export async function autoResolveTicketById(ticketId: number): Promise<void> {
       `Auto-resolve failed for ticket ${ticketId}; opening it for an agent:`,
       error,
     );
+    // Hand off to a human: open it and clear the AI agent's assignment so it
+    // returns to the unassigned queue.
     await prisma.ticket.updateMany({
       where: { id: ticketId, status: "processing" },
-      data: { status: "open" },
+      data: { status: "open", assigneeId: null },
     });
     return;
   }
 
   if (!result.resolved) {
+    // Couldn't answer from the knowledge base — hand off to a human, unassigned.
     await prisma.ticket.updateMany({
       where: { id: ticketId, status: "processing" },
-      data: { status: "open" },
+      data: { status: "open", assigneeId: null },
     });
     return;
   }
@@ -82,14 +86,17 @@ export async function autoResolveTicketById(ticketId: number): Promise<void> {
   });
   if (resolved.count === 0) return;
 
+  // The ticket keeps its AI agent assignment (the resolve updateMany above doesn't
+  // touch it), so a `resolved` ticket assigned to the AI agent is exactly one the
+  // AI answered — the signal the dashboard's "resolved by AI" metric keys off.
   await prisma.ticketReply.create({
     data: {
       ticketId,
       body: result.reply,
       // The auto-reply is the support side answering the customer, so it's an
-      // agent-type reply — but with no authoring User (it's the system).
+      // agent-type reply — authored by the AI agent (the identity it ran as).
       senderType: "agent",
-      authorId: null,
+      authorId: AI_AGENT_ID,
     },
   });
 }

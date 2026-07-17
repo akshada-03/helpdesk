@@ -9,6 +9,7 @@ import type {
 
 import prisma from "../db";
 import { Role as UserRole } from "../generated/prisma/enums";
+import { AI_AGENT_ID } from "../lib/ai-agent";
 import { auth } from "../lib/auth";
 import { validate } from "../lib/validate";
 import { requireRole } from "../middleware/require-role";
@@ -30,7 +31,9 @@ export const agentsRouter = Router();
 
 agentsRouter.get("/", requireRole(Role.admin), async (_req, res) => {
   const agents = await prisma.user.findMany({
-    where: { deletedAt: null },
+    // The AI agent is a system identity auto-resolution runs as, not a human an
+    // admin assigns work to, so it's excluded from the assignee dropdown.
+    where: { deletedAt: null, id: { not: AI_AGENT_ID } },
     select: { id: true, name: true, email: true },
     orderBy: { name: "asc" },
   });
@@ -46,8 +49,9 @@ export const usersRouter = Router();
 // never exposes anything auth-sensitive (credentials live on the Account model).
 usersRouter.get("/", requireRole(Role.admin), async (_req, res) => {
   const users = await prisma.user.findMany({
-    // Soft-deleted users are hidden from the admin list.
-    where: { deletedAt: null },
+    // Soft-deleted users are hidden from the admin list, as is the AI agent (a
+    // system identity, not a managed human account).
+    where: { deletedAt: null, id: { not: AI_AGENT_ID } },
     select: {
       id: true,
       name: true,

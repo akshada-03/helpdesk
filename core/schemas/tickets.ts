@@ -173,6 +173,38 @@ export type PolishReplyResponse = {
   body: string;
 };
 
+// One day's ticket volume, for the dashboard's per-day bar chart. `date` is the
+// UTC calendar day as an ISO date string (`YYYY-MM-DD`); `count` is the number of
+// tickets created that day (same exclusions as `total` — no `new`/`processing`).
+export const dailyTicketCountSchema = z.object({
+  date: z.string(),
+  count: z.number().int().nonnegative(),
+});
+export type DailyTicketCount = z.infer<typeof dailyTicketCountSchema>;
+
+// Response from GET /api/tickets/stats — aggregate metrics for the dashboard.
+// These are now computed by the `ticket_stats` SQL function (see the
+// add_ticket_stats_function migration); this schema validates the JSON it returns.
+// Counts exclude the intake-hidden `new`/`processing` statuses (`total` is
+// open + resolved + closed). `aiResolved` is the subset of resolved tickets the AI
+// agent answered (resolved + still assigned to it); the client derives the
+// "% resolved by AI" rate as `aiResolved / resolved`. `avgResolutionMs` is the mean
+// time from creation to resolution over resolved tickets (null when there are
+// none); it approximates resolution time with `updatedAt − createdAt` — exact for
+// AI resolutions (the worker's status write is the ticket's last update), and an
+// approximation for agent resolutions, since a later edit bumps `updatedAt`.
+// `daily` is a zero-filled series of the last 30 UTC days (oldest → newest) for the
+// per-day volume chart.
+export const ticketStatsResponseSchema = z.object({
+  total: z.number().int().nonnegative(),
+  open: z.number().int().nonnegative(),
+  resolved: z.number().int().nonnegative(),
+  aiResolved: z.number().int().nonnegative(),
+  avgResolutionMs: z.number().nullable(),
+  daily: z.array(dailyTicketCountSchema),
+});
+export type TicketStatsResponse = z.infer<typeof ticketStatsResponseSchema>;
+
 // Response from POST /api/tickets/:id/summary — an AI summary of the ticket and its
 // reply thread, for the agent working it. The request has no body: everything the
 // summary covers is already server-side, so the client sends only the ticket id.

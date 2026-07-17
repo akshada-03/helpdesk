@@ -6,6 +6,7 @@ import {
   createReplySchema,
   polishReplySchema,
   ticketListQuerySchema,
+  ticketStatsResponseSchema,
   type PolishReplyResponse,
   type SummarizeTicketResponse,
   type TicketDetail,
@@ -17,6 +18,7 @@ import {
 
 import prisma from "../db";
 import type { Prisma } from "../generated/prisma/client";
+import { AI_AGENT_ID } from "../lib/ai-agent";
 import { polishReply, summarizeTicket } from "../lib/ai";
 import { parseId } from "../lib/parse-id";
 import { validate } from "../lib/validate";
@@ -171,6 +173,25 @@ ticketsRouter.get("/", async (req, res) => {
     pageSize: query.pageSize,
   };
   res.json(body);
+});
+
+// Aggregate metrics for the dashboard. Registered before `/:id` so "stats" isn't
+// parsed as a ticket id. Any authenticated user may read it (requireAuth is applied
+// by the parent apiRouter). Counts exclude the intake-hidden new/processing states.
+ticketsRouter.get("/stats", async (_req, res) => {
+  // All the aggregation lives in the `ticket_stats` SQL function (see the
+  // add_ticket_stats_function migration); the API just calls it and validates the
+  // JSON it returns. The AI agent id is passed in so the DB function stays
+  // decoupled from the app constant. jsonb comes back as a parsed object under the
+  // pg driver, but guard against a string just in case.
+  const rows = await prisma.$queryRaw<{ stats: unknown }[]>`
+    SELECT ticket_stats(${AI_AGENT_ID}::text) AS stats
+  `;
+  const raw = rows[0]?.stats;
+  const stats = ticketStatsResponseSchema.parse(
+    typeof raw === "string" ? JSON.parse(raw) : raw,
+  );
+  res.json(stats);
 });
 
 // Single ticket detail. The id is an integer, so it's parsed via parseId — a

@@ -2,6 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 
 import prisma from "../db";
+import { AI_AGENT_ID } from "../lib/ai-agent";
 import { isAiConfigured } from "../lib/ai";
 import {
   sendAutoResolveTicketJob,
@@ -44,7 +45,13 @@ webhooksRouter.post("/inbound-email", upload.none(), async (req, res) => {
       // id is an auto-incrementing integer — the DB assigns it.
       ...ticketFromInboundEmail(data),
       // category is left null until AI classification runs.
-      ...(aiConfigured ? { status: "new" as const } : {}),
+      // When AI is on, the ticket enters the pipeline as `new` and is assigned to
+      // the AI agent, which owns it while auto-resolution runs. The worker keeps
+      // that assignment if it resolves the ticket, or clears it when handing off to
+      // a human (see lib/auto-resolve).
+      ...(aiConfigured
+        ? { status: "new" as const, assigneeId: AI_AGENT_ID }
+        : {}),
     },
   });
 
