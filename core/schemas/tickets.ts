@@ -1,8 +1,8 @@
 import { z } from "zod/v4";
 
 import {
+  agentTicketStatuses,
   ticketCategories,
-  ticketStatuses,
   type ReplySenderType,
   type TicketCategory,
   type TicketStatus,
@@ -30,7 +30,9 @@ export type TicketSortField = (typeof ticketSortFields)[number];
 export const ticketListQuerySchema = z.object({
   sortBy: z.enum(ticketSortFields).default("createdAt"),
   order: z.enum(["asc", "desc"]).default("desc"),
-  status: z.enum(ticketStatuses).optional(),
+  // Only agent-visible statuses are filterable — the endpoint never surfaces
+  // `new`/`processing` regardless, so accepting them here would be misleading.
+  status: z.enum(agentTicketStatuses).optional(),
   category: z.enum(ticketCategories).optional(),
   search: z
     .string()
@@ -110,7 +112,9 @@ export type TicketDetail = {
 // here, since this schema is shared with the client.
 export const updateTicketSchema = z
   .object({
-    status: z.enum(ticketStatuses).optional(),
+    // Agents may only move a ticket between the agent-visible statuses; the
+    // AI pipeline owns the `new`/`processing` transitions.
+    status: z.enum(agentTicketStatuses).optional(),
     category: z.enum(ticketCategories).nullable().optional(),
     assigneeId: z.string().min(1).nullable().optional(),
   })

@@ -4,8 +4,26 @@
 // each is an `as const` array whose element type is still the structural string
 // union (e.g. Record<TicketStatus> keys stay exhaustive; values check against it).
 
-export const ticketStatuses = ["open", "resolved", "closed"] as const;
+// The full status set, mirroring the Prisma `TicketStatus` enum. `new` and
+// `processing` are system-managed states in the AI intake pipeline (a ticket is
+// created `new`, the auto-resolve worker moves it to `processing`, then to a
+// terminal status) — they exist in the type so payloads can carry them, but
+// agents never set them.
+export const ticketStatuses = [
+  "open",
+  "resolved",
+  "closed",
+  "new",
+  "processing",
+] as const;
 export type TicketStatus = (typeof ticketStatuses)[number];
+
+// The statuses agents actually work with — used for the status filter, the
+// status editor, and what PATCH /api/tickets/:id accepts. `new`/`processing` are
+// deliberately excluded: they're hidden from the list and must not be settable by
+// hand (the AI pipeline owns those transitions).
+export const agentTicketStatuses = ["open", "resolved", "closed"] as const;
+export type AgentTicketStatus = (typeof agentTicketStatuses)[number];
 
 export const ticketCategories = [
   "general_question",

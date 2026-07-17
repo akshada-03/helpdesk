@@ -3,7 +3,10 @@ import multer from "multer";
 
 import prisma from "../db";
 import { isAiConfigured } from "../lib/ai";
-import { sendClassifyTicketJob } from "../lib/queue";
+import {
+  sendAutoResolveTicketJob,
+  sendClassifyTicketJob,
+} from "../lib/queue";
 import { WEBHOOK_SECRET } from "../lib/env";
 import {
   inboundEmailSchema,
@@ -30,21 +33,31 @@ webhooksRouter.post("/inbound-email", upload.none(), async (req, res) => {
   const data = validate(inboundEmailSchema, req.body, res);
   if (!data) return;
 
+  // When AI is on, the ticket enters the intake pipeline as `new` — hidden from
+  // agents while the auto-resolve worker tries to answer it, then moved to a
+  // terminal status by that worker. With AI off there's no pipeline, so it starts
+  // `open` (the column default) and is immediately visible to agents.
+  const aiConfigured = isAiConfigured();
+
   const ticket = await prisma.ticket.create({
     data: {
       // id is an auto-incrementing integer — the DB assigns it.
       ...ticketFromInboundEmail(data),
-      // status defaults to `open`; category is left null until AI classification.
+      // category is left null until AI classification runs.
+      ...(aiConfigured ? { status: "new" as const } : {}),
     },
   });
 
-  // Enqueue background classification, but only when AI is configured — an
-  // unconfigured server would otherwise queue jobs that can only fail. Enqueuing is
-  // a quick, durable DB insert that never throws (see sendClassifyTicketJob), so we
-  // await it before responding: the job is committed before the email is
-  // acknowledged, and a worker picks it up off the request path.
-  if (isAiConfigured()) {
+  // Enqueue the background intake jobs, but only when AI is configured — an
+  // unconfigured server would otherwise queue jobs that can only fail (and would
+  // strand the ticket in `new`). Enqueuing is a quick, durable DB insert that never
+  // throws (see the send* helpers), so we await both before responding: the jobs are
+  // committed before the email is acknowledged, and workers pick them up off the
+  // request path. Auto-resolve owns the `new` → `processing` → terminal transition;
+  // classification fills in the category alongside it.
+  if (aiConfigured) {
     await sendClassifyTicketJob(ticket.id);
+    await sendAutoResolveTicketJob(ticket.id);
   }
 
   // SendGrid treats any 2xx as successful delivery; a non-2xx triggers retries.

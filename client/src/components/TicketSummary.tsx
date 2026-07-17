@@ -69,7 +69,10 @@ export default function TicketSummary({ ticketId }: { ticketId: number }) {
       {summary && (
         <div className="bg-muted/50 space-y-1 rounded-md p-3">
           <h3 className="text-muted-foreground text-xs font-medium">Summary</h3>
-          <p>{summary}</p>
+          {/* The summary can come back as multiple lines or bullet points, so
+              preserve its newlines rather than collapsing them into one block —
+              matching how the message body and replies are rendered. */}
+          <p className="text-sm whitespace-pre-wrap">{summary}</p>
         </div>
       )}
     </div>

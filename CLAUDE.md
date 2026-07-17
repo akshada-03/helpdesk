@@ -59,11 +59,12 @@ The client proxies `/api/*` requests to the server via Vite config (target is co
 
 ## Job Queue (pg-boss)
 
-- **Config**: `server/src/lib/queue.ts` — creates pg-boss instance using `DATABASE_URL`
+- **Infrastructure**: `server/src/lib/queue.ts` — owns the pg-boss instance and its lifecycle (`startQueue`/`stopQueue`) using `DATABASE_URL`, plus a generic never-throw `enqueue(queueName, data)` helper
+- **Job definitions**: `server/src/lib/ticket-jobs.ts` — the ticket queues' names, retry policy, worker handlers (`registerTicketJobs`), and the `send*Job()` helpers (re-exported from `queue.ts`, so callers still import them from `../lib/queue`)
 - pg-boss auto-creates its own `pgboss` schema in PostgreSQL (no Prisma migration needed)
-- `startQueue()` is called before `app.listen()` in the async `boot()` function in `index.ts`
+- `startQueue()` is called before `app.listen()` in the async `boot()` function in `index.ts`; it starts pg-boss then calls `registerTicketJobs()`
 - `stopQueue()` is called on `SIGTERM`/`SIGINT` for graceful shutdown
-- To add a new background job: create a queue with `boss.createQueue()`, register a worker with `boss.work()` in `startQueue()`, and export a `send*Job()` function
+- To add a new background job: create a queue with `boss.createQueue()` and register a worker with `boss.work()` inside `registerTicketJobs()` (in `ticket-jobs.ts`), then export a `send*Job()` helper that calls `enqueue()`
 - **Existing queues**:
   - `classify-ticket` — classifies inbound tickets via GPT (retryLimit: 3, retryDelay: 30s, exponential backoff)
   - `auto-resolve-ticket` — attempts to auto-resolve tickets via GPT; if unsuccessful, transitions status to `open`

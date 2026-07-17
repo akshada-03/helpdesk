@@ -86,10 +86,17 @@ model Verification {
 
 // --- Support tickets ---
 
+// `new` and `processing` are system-managed states in the AI intake pipeline: a
+// ticket is created `new`, the auto-resolve worker flips it to `processing` while
+// it works, then to `resolved` (auto-answered from the knowledge base) or `open`
+// (handed to an agent). Agents only ever see open/resolved/closed — the list
+// endpoint hides new/processing and the PATCH schema won't accept them.
 enum TicketStatus {
   open
   resolved
   closed
+  new
+  processing
 }
 
 enum TicketCategory {

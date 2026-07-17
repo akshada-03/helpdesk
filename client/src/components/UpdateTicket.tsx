@@ -1,8 +1,8 @@
 import { Role } from "core/constants/role.ts";
 import {
-  ticketStatuses,
+  agentTicketStatuses,
   ticketCategories,
-  type TicketStatus,
+  type AgentTicketStatus,
   type TicketCategory,
 } from "core/constants/ticket.ts";
 import type { TicketDetail as TicketDetailData } from "core/schemas/tickets.ts";
@@ -13,7 +13,9 @@ import { Card, CardContent } from "@/components/ui/card";
 
 // Display labels for each status/category. Explicit maps (rather than deriving
 // the label from the value) so the wording is fully under our control.
-const statusLabels: Record<TicketStatus, string> = {
+// Only the agent-settable statuses are offered in the editor; the `new`/
+// `processing` intake states are system-managed and never shown here.
+const statusLabels: Record<AgentTicketStatus, string> = {
   open: "Open",
   resolved: "Resolved",
   closed: "Closed",
@@ -45,11 +47,11 @@ export default function UpdateTicket({ ticket }: { ticket: TicketDetailData }) {
               ticketId={ticket.id}
               value={ticket.status}
               ariaLabel="Update status"
-              options={ticketStatuses.map((s) => ({
+              options={agentTicketStatuses.map((s) => ({
                 value: s,
                 label: statusLabels[s],
               }))}
-              buildPatch={(v) => ({ status: v as TicketStatus })}
+              buildPatch={(v) => ({ status: v as AgentTicketStatus })}
             />
           </div>
 

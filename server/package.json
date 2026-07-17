@@ -11,6 +11,7 @@
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:seed": "bun prisma/seed.ts",
+    "db:seed:tickets": "bun prisma/seed-tickets.ts",
     "db:seed:replies": "bun prisma/seed-replies.ts"
   },
   "dependencies": {

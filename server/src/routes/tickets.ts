@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { Role } from "core/constants/role.ts";
+import type { TicketStatus } from "core/constants/ticket.ts";
 import {
   updateTicketSchema,
   createReplySchema,
@@ -90,6 +91,11 @@ const nullableSortFields = new Set<TicketSortField>([
   "requesterName",
 ]);
 
+// System-managed intake statuses that agents must never see in the list. Excluded
+// from every list query (see the `where` below), so a ticket mid-pipeline stays
+// hidden until it lands on a terminal, agent-visible status.
+const HIDDEN_TICKET_STATUSES: TicketStatus[] = ["new", "processing"];
+
 ticketsRouter.get("/", async (req, res) => {
   const query = validate(ticketListQuerySchema, req.query, res);
   if (!query) return;
@@ -101,8 +107,13 @@ ticketsRouter.get("/", async (req, res) => {
   // Optional filters. An omitted param leaves the field off `where` entirely, so
   // it isn't constrained (matches all values). `search` is a case-insensitive
   // substring match across the subject, requester name/email, and body.
+  //
+  // Status is special: `new` and `processing` are system-managed intake states
+  // that agents must never see, so when no status filter is given we still exclude
+  // them (rather than matching all). A concrete filter is always an agent status
+  // (the query schema won't accept the hidden ones), so it can't reveal them either.
   const where = {
-    ...(query.status ? { status: query.status } : {}),
+    status: query.status ?? { notIn: HIDDEN_TICKET_STATUSES },
     ...(query.category ? { category: query.category } : {}),
     ...(query.search
       ? {

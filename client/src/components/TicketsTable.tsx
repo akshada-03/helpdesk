@@ -12,8 +12,8 @@ import {
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 
 import {
+  agentTicketStatuses,
   ticketCategories,
-  ticketStatuses,
   type TicketStatus,
   type TicketCategory,
 } from "core/constants/ticket.ts";
@@ -48,7 +48,9 @@ const ALL = "all";
 // Rows per page. Server-side pagination, so this is sent as the `pageSize` param.
 const PAGE_SIZE = 10;
 
-// Badge styling per status.
+// Badge styling per status. The list only ever shows agent-visible tickets, so
+// the `new`/`processing` intake states never actually render here — they're mapped
+// only to keep the record exhaustive over TicketStatus.
 const statusVariant: Record<
   TicketStatus,
   "default" | "secondary" | "outline"
@@ -56,6 +58,8 @@ const statusVariant: Record<
   open: "default",
   resolved: "secondary",
   closed: "outline",
+  new: "outline",
+  processing: "outline",
 };
 
 // "open" → "Open".
@@ -280,7 +284,7 @@ export default function TicketsTable() {
         </SelectTrigger>
         <SelectContent>
           <SelectItem value={ALL}>All statuses</SelectItem>
-          {ticketStatuses.map((s) => (
+          {agentTicketStatuses.map((s) => (
             <SelectItem key={s} value={s}>
               {capitalize(s)}
             </SelectItem>

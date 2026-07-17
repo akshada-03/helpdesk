@@ -131,6 +131,140 @@ ${input.body}`,
   );
 }
 
+// Instructions for the auto-responder. On a ticket's arrival the system tries to
+// close it without a human by answering purely from the support knowledge base.
+// The guardrails all pull one way — never answer beyond the knowledge base —
+// because a confident wrong answer sent automatically is far worse than handing
+// the ticket to an agent: there's no human in the loop to catch it.
+//
+// The knowledge base carries its own escalation rules (refunds outside the
+// window, legal/chargeback threats, account-security issues, low confidence); the
+// prompt is told to treat those as hard stops that force a handoff. The model
+// answers with strict JSON so the worker can act on a machine-readable decision
+// rather than parsing prose.
+const AUTO_RESOLVE_SYSTEM_PROMPT = `You are a first-line customer support agent for \
+Code with Mosh. You are given the official support knowledge base and one inbound \
+customer ticket. Decide whether the ticket can be fully and safely resolved right \
+now using ONLY the knowledge base, and if so, write the reply to send.
+
+Resolve the ticket (canResolve = true) only when ALL of these hold:
+- The knowledge base clearly and completely answers the customer's question or \
+request. If it only partially covers it, or you would have to guess, do not resolve.
+- None of the knowledge base's escalation rules apply. Re-read its escalation \
+section and hand off (canResolve = false) whenever any of them is triggered — legal \
+threats, refunds outside the stated window, chargebacks or payment disputes, \
+account-security concerns, or anything where your confidence is low.
+- The request does not require an action only a human or another system can take \
+(issuing a refund, changing an account, looking up order-specific data). Explaining \
+a policy is fine; performing the action is not.
+
+When you resolve, write "reply" as a complete, professional, and genuinely \
+customer-friendly message:
+- Answer using only facts from the knowledge base. Never invent policies, \
+timelines, links, or steps that are not in it.
+- Open with a greeting on its own line that addresses the customer by the name given \
+in "Customer's first name", copied exactly, in the form "Hi <first name>,". If that \
+field says the name is unknown, use "Hi there," instead — never guess a name.
+- Keep the tone warm, respectful, and reassuring: briefly acknowledge what the \
+customer asked, be genuinely helpful, and never sound curt, robotic, or dismissive.
+- Format the reply for easy reading: use short paragraphs separated by a blank line, \
+and a numbered or bulleted list whenever you give steps or several points. Never cram \
+everything into one dense block of text.
+- Before the sign-off, add a short, friendly closing line inviting the customer to \
+reply if they need anything else.
+- End with exactly this sign-off, on its own two lines:
+Best regards,
+Code with Mosh Support
+- Do not add a subject line, and do not wrap the reply in quotes or markdown.
+- Match the language of the ticket.
+
+When you do NOT resolve, set canResolve = false and set "reply" to an empty string.
+
+Respond with ONLY a JSON object, no code fences or commentary, in exactly this shape:
+{"canResolve": boolean, "reply": string}`;
+
+// The model's decision, validated before the worker acts on it. `reply` is only
+// meaningful when canResolve is true; the schema keeps both fields present so a
+// truncated/garbled response fails the parse rather than being half-trusted.
+const autoResolveSchema = z.object({
+  canResolve: z.boolean(),
+  reply: z.string(),
+});
+
+// The outcome the auto-resolve worker acts on: either a ready-to-send reply, or a
+// decision to leave the ticket for a human. Discriminated so a `resolved` result
+// always carries the reply text and an unresolved one never does.
+export type AutoResolveResult =
+  | { resolved: true; reply: string }
+  | { resolved: false };
+
+// Pulls the JSON object out of the model's answer. The prompt asks for bare JSON,
+// but models still occasionally wrap it in ```json fences or add a stray word, so
+// we slice from the first "{" to the last "}" before parsing rather than trusting
+// the response to be clean. Returns null when there's nothing object-shaped to try.
+function extractJson(text: string): unknown {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end <= start) return null;
+  try {
+    return JSON.parse(text.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+}
+
+// Attempts to resolve an inbound ticket from the knowledge base alone. Returns
+// whether it was resolved and, if so, the customer-facing reply to send. The
+// knowledge base is passed in (read from disk by the caller) rather than embedded
+// here so the policy content stays editable without touching code.
+//
+// A resolution requires a non-empty reply: the model can say canResolve = true, but
+// an empty reply is treated as "not resolved" so we never post a blank message. The
+// caller runs this in the background (see lib/auto-resolve.ts) and treats a throw or
+// an unresolved result the same way — leave the ticket for an agent.
+//
+// Throws if the model call fails or returns something that isn't the expected JSON;
+// the caller catches that and falls back to handing the ticket to a human.
+export async function autoResolveTicket(input: {
+  subject: string;
+  body: string;
+  requesterName: string | null;
+  knowledgeBase: string;
+}): Promise<AutoResolveResult> {
+  const customerFirstName = firstName(input.requesterName);
+
+  const { text } = await generateText({
+    model: model(),
+    system: AUTO_RESOLVE_SYSTEM_PROMPT,
+    prompt: `Knowledge base:
+${input.knowledgeBase}
+
+---
+
+Customer's first name: ${customerFirstName ?? "(unknown — use a neutral greeting)"}
+
+Ticket subject: ${input.subject}
+
+Ticket message:
+${input.body}`,
+  });
+
+  const parsed = autoResolveSchema.safeParse(extractJson(text));
+  if (!parsed.success) {
+    throw new Error(
+      `Auto-resolver returned an unparseable response: ${JSON.stringify(text)}`,
+    );
+  }
+
+  // Guard against a "resolved" verdict with no message — posting an empty reply
+  // would be worse than handing the ticket to an agent.
+  const reply = parsed.data.reply.trim();
+  if (parsed.data.canResolve && reply) {
+    return { resolved: true, reply };
+  }
+  return { resolved: false };
+}
+
 // Instructions for the ticket summarizer. Agents read a summary to get back up to
 // speed on a thread they may not have worked, so the rules pull hard against the
 // two failure modes that would make it untrustworthy: inventing a resolution that
