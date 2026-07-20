@@ -19,6 +19,7 @@
     "@ai-sdk/openai-compatible": "^3.0.10",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "@sentry/node": "^10.66.0",
     "@types/multer": "^2.2.0",
     "ai": "^7.0.28",
     "better-auth": "^1.6.23",

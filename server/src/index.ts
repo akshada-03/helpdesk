@@ -1,3 +1,7 @@
+// Must be imported first so Sentry can instrument modules as they load.
+import "./instrument";
+
+import * as Sentry from "@sentry/node";
 import express from "express";
 import cors from "cors";
 import { toNodeHandler } from "better-auth/node";
@@ -27,6 +31,12 @@ app.use("/api", apiRouter);
 app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });
 });
+
+// Sentry's Express error handler — must come after all routes and before any
+// other error-handling middleware. Captures errors thrown by (or forwarded from)
+// route handlers, including rejected async handlers under Express 5. No-op when
+// SENTRY_DSN is unset.
+Sentry.setupExpressErrorHandler(app);
 
 // Start background infrastructure before accepting traffic, then listen. The queue
 // must be up first so any classification enqueued by an early inbound webhook has a
@@ -59,5 +69,6 @@ async function boot() {
 
 boot().catch((error) => {
   console.error("Failed to start server:", error);
+  Sentry.captureException(error);
   process.exit(1);
 });

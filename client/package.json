@@ -16,6 +16,7 @@
     "@hookform/resolvers": "^5.4.0",
     "@radix-ui/react-label": "^2.1.11",
     "@radix-ui/react-slot": "^1.2.3",
+    "@sentry/react": "^10.66.0",
     "@tanstack/react-query": "^5.62.0",
     "@tanstack/react-table": "^8.21.3",
     "axios": "^1.7.9",
