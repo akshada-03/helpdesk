@@ -21,6 +21,7 @@ import type { Prisma } from "../generated/prisma/client";
 import { AI_AGENT_ID } from "../lib/ai-agent";
 import { polishReply, summarizeTicket } from "../lib/ai";
 import { parseId } from "../lib/parse-id";
+import { sendReplyEmailJob } from "../lib/queue";
 import { validate } from "../lib/validate";
 
 // Every `/:id` handler starts by parsing the param, so they share one message.
@@ -438,6 +439,11 @@ ticketsRouter.post("/:id/replies", async (req, res) => {
     },
     select: replySelect,
   });
+
+  // Email the reply to the requester in the background. Never-throwing and no-ops
+  // when email isn't configured, so it can't fail the request; the reply is saved
+  // regardless of whether the mail goes out.
+  await sendReplyEmailJob(reply.id);
 
   res.status(201).json(toTicketReply(reply));
 });

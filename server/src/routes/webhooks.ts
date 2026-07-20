@@ -1,18 +1,9 @@
 import { Router } from "express";
 import multer from "multer";
 
-import prisma from "../db";
-import { AI_AGENT_ID } from "../lib/ai-agent";
-import { isAiConfigured } from "../lib/ai";
-import {
-  sendAutoResolveTicketJob,
-  sendClassifyTicketJob,
-} from "../lib/queue";
 import { WEBHOOK_SECRET } from "../lib/env";
-import {
-  inboundEmailSchema,
-  ticketFromInboundEmail,
-} from "../lib/inbound-email";
+import { inboundEmailSchema } from "../lib/inbound-email";
+import { intakeEmailTicket } from "../lib/ticket-intake";
 import { validate } from "../lib/validate";
 
 export const webhooksRouter = Router();
@@ -34,39 +25,17 @@ webhooksRouter.post("/inbound-email", upload.none(), async (req, res) => {
   const data = validate(inboundEmailSchema, req.body, res);
   if (!data) return;
 
-  // When AI is on, the ticket enters the intake pipeline as `new` — hidden from
-  // agents while the auto-resolve worker tries to answer it, then moved to a
-  // terminal status by that worker. With AI off there's no pipeline, so it starts
-  // `open` (the column default) and is immediately visible to agents.
-  const aiConfigured = isAiConfigured();
+  // All the create + AI-pipeline logic lives in lib/ticket-intake, shared with the
+  // IMAP poller so both inbound paths create a ticket identically. Returns null when
+  // the message had no valid sender address and was dropped (a ticket always has a
+  // sender email).
+  const ticket = await intakeEmailTicket(data);
 
-  const ticket = await prisma.ticket.create({
-    data: {
-      // id is an auto-incrementing integer — the DB assigns it.
-      ...ticketFromInboundEmail(data),
-      // category is left null until AI classification runs.
-      // When AI is on, the ticket enters the pipeline as `new` and is assigned to
-      // the AI agent, which owns it while auto-resolution runs. The worker keeps
-      // that assignment if it resolves the ticket, or clears it when handing off to
-      // a human (see lib/auto-resolve).
-      ...(aiConfigured
-        ? { status: "new" as const, assigneeId: AI_AGENT_ID }
-        : {}),
-    },
-  });
-
-  // Enqueue the background intake jobs, but only when AI is configured — an
-  // unconfigured server would otherwise queue jobs that can only fail (and would
-  // strand the ticket in `new`). Enqueuing is a quick, durable DB insert that never
-  // throws (see the send* helpers), so we await both before responding: the jobs are
-  // committed before the email is acknowledged, and workers pick them up off the
-  // request path. Auto-resolve owns the `new` → `processing` → terminal transition;
-  // classification fills in the category alongside it.
-  if (aiConfigured) {
-    await sendClassifyTicketJob(ticket.id);
-    await sendAutoResolveTicketJob(ticket.id);
+  // SendGrid treats any 2xx as successful delivery; a non-2xx triggers retries. A
+  // dropped (sender-less) message is still acknowledged so it isn't redelivered.
+  if (!ticket) {
+    res.status(200).json({ dropped: "no valid sender address" });
+    return;
   }
-
-  // SendGrid treats any 2xx as successful delivery; a non-2xx triggers retries.
   res.status(200).json({ ticketId: ticket.id });
 });

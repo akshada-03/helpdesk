@@ -3,6 +3,10 @@ import cors from "cors";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth";
 import { CLIENT_URL } from "./lib/env";
+import {
+  startInboundEmailPolling,
+  stopInboundEmailPolling,
+} from "./lib/imap";
 import { startQueue, stopQueue } from "./lib/queue";
 import { apiRouter } from "./routes";
 
@@ -30,6 +34,11 @@ app.use((_req, res) => {
 async function boot() {
   await startQueue();
 
+  // Start the inbound-email poller after the queue is up — intake enqueues the
+  // classify/auto-resolve jobs, so their workers must be registered first. No-ops
+  // when IMAP isn't configured.
+  startInboundEmailPolling();
+
   const server = app.listen(PORT, () => {
     console.log(`API server listening on http://localhost:${PORT}`);
   });
@@ -39,6 +48,7 @@ async function boot() {
   async function shutdown(signal: string) {
     console.log(`\n${signal} received — shutting down.`);
     server.close();
+    stopInboundEmailPolling();
     await stopQueue();
     process.exit(0);
   }

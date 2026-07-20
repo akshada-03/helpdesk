@@ -2,6 +2,7 @@ import prisma from "../db";
 import { AI_AGENT_ID } from "./ai-agent";
 import { autoResolveTicket } from "./ai";
 import { loadKnowledgeBase } from "./knowledge-base";
+import { sendReplyEmailJob } from "./queue";
 
 // The work performed by the `auto-resolve-ticket` queue worker (registered in
 // lib/queue): on a ticket's arrival, try to answer it from the knowledge base
@@ -89,7 +90,7 @@ export async function autoResolveTicketById(ticketId: number): Promise<void> {
   // The ticket keeps its AI agent assignment (the resolve updateMany above doesn't
   // touch it), so a `resolved` ticket assigned to the AI agent is exactly one the
   // AI answered — the signal the dashboard's "resolved by AI" metric keys off.
-  await prisma.ticketReply.create({
+  const reply = await prisma.ticketReply.create({
     data: {
       ticketId,
       body: result.reply,
@@ -98,5 +99,10 @@ export async function autoResolveTicketById(ticketId: number): Promise<void> {
       senderType: "agent",
       authorId: AI_AGENT_ID,
     },
+    select: { id: true },
   });
+
+  // Email the AI's answer to the customer, same path as an agent reply. Never-throws
+  // and no-ops without email configured, so it can't wedge the worker.
+  await sendReplyEmailJob(reply.id);
 }

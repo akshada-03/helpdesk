@@ -2,6 +2,7 @@ import type { PgBoss } from "pg-boss";
 
 import { classifyTicketById } from "./classify";
 import { autoResolveTicketById } from "./auto-resolve";
+import { sendTicketReplyEmailById } from "./reply-email";
 import { enqueue } from "./queue";
 
 // The ticket background jobs: their queue names, retry policy, worker handlers, and
@@ -13,9 +14,11 @@ import { enqueue } from "./queue";
 
 const CLASSIFY_TICKET_QUEUE = "classify-ticket";
 const AUTO_RESOLVE_TICKET_QUEUE = "auto-resolve-ticket";
+const SEND_REPLY_EMAIL_QUEUE = "send-ticket-reply-email";
 
 type ClassifyTicketJob = { ticketId: number };
 type AutoResolveTicketJob = { ticketId: number };
+type SendReplyEmailJob = { replyId: number };
 
 // Shared by both ticket queues: a few retries with exponential backoff so a transient
 // model/network blip doesn't permanently drop the work; once they're exhausted pg-boss
@@ -48,6 +51,14 @@ export async function registerTicketJobs(boss: PgBoss): Promise<void> {
       await autoResolveTicketById(job.data.ticketId);
     },
   );
+
+  // send-ticket-reply-email: email a support reply to the ticket's requester. The
+  // handler throws on an SMTP failure so the retry policy applies; a persistent
+  // failure gives up with the reply still saved (see lib/reply-email).
+  await boss.createQueue(SEND_REPLY_EMAIL_QUEUE, RETRY_POLICY);
+  await boss.work<SendReplyEmailJob>(SEND_REPLY_EMAIL_QUEUE, async ([job]) => {
+    await sendTicketReplyEmailById(job.data.replyId);
+  });
 }
 
 // Enqueues a ticket for background classification. Durable and never-throwing (see
@@ -66,4 +77,12 @@ export async function sendAutoResolveTicketJob(ticketId: number): Promise<void> 
   await enqueue(AUTO_RESOLVE_TICKET_QUEUE, {
     ticketId,
   } satisfies AutoResolveTicketJob);
+}
+
+// Enqueues a support reply to be emailed to the ticket's requester. Same durability
+// and never-throw contract as the other send helpers. Safe to call unconditionally:
+// the worker no-ops when email isn't configured, and only agent-side replies are
+// actually sent (see lib/reply-email).
+export async function sendReplyEmailJob(replyId: number): Promise<void> {
+  await enqueue(SEND_REPLY_EMAIL_QUEUE, { replyId } satisfies SendReplyEmailJob);
 }

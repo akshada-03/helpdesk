@@ -41,3 +41,35 @@ export const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 export const AI_BASE_URL = process.env.AI_BASE_URL;
 export const AI_API_KEY = process.env.AI_API_KEY;
 export const AI_MODEL = process.env.AI_MODEL;
+
+// --- Outbound email (SMTP, via nodemailer) ---
+// Sends agent + AI replies back to the requester. Entirely optional, like AI: with
+// these unset the app runs normally and simply doesn't email anyone (replies are
+// still saved and shown in the UI). Any SMTP server works — a free Gmail account
+// with an App Password is the zero-cost default (see server/.env.example).
+//   SMTP_HOST/PORT — the server, e.g. smtp.gmail.com:465
+//   SMTP_SECURE    — "true" for implicit TLS (port 465); "false" for STARTTLS (587)
+//   SMTP_USER/PASS — the mailbox login (for Gmail, an App Password, not the account one)
+//   SMTP_FROM      — the From address on outgoing mail (defaults to SMTP_USER)
+export const SMTP_HOST = process.env.SMTP_HOST;
+export const SMTP_PORT = process.env.SMTP_PORT;
+export const SMTP_SECURE = process.env.SMTP_SECURE;
+export const SMTP_USER = process.env.SMTP_USER;
+export const SMTP_PASS = process.env.SMTP_PASS;
+export const SMTP_FROM = process.env.SMTP_FROM;
+
+// --- Inbound email (IMAP polling, via imapflow) ---
+// Polls a mailbox and turns each new message into a ticket — the same intake as the
+// SendGrid webhook, for setups without a provider that can POST webhooks. Optional:
+// unset means no polling (the webhook still works). Reuses the SMTP mailbox by
+// default when only the host differs.
+//   IMAP_HOST/PORT — the server, e.g. imap.gmail.com:993
+//   IMAP_SECURE    — "false" to disable implicit TLS (defaults to true; 993 is TLS)
+//   IMAP_USER/PASS — mailbox login (defaults to SMTP_USER/SMTP_PASS — same account)
+//   IMAP_POLL_SECONDS — how often to check for new mail (defaults to 60)
+export const IMAP_HOST = process.env.IMAP_HOST;
+export const IMAP_PORT = process.env.IMAP_PORT;
+export const IMAP_SECURE = process.env.IMAP_SECURE;
+export const IMAP_USER = process.env.IMAP_USER ?? SMTP_USER;
+export const IMAP_PASS = process.env.IMAP_PASS ?? SMTP_PASS;
+export const IMAP_POLL_SECONDS = process.env.IMAP_POLL_SECONDS;

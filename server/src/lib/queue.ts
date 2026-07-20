@@ -75,4 +75,5 @@ export async function enqueue<T extends object>(
 export {
   sendClassifyTicketJob,
   sendAutoResolveTicketJob,
+  sendReplyEmailJob,
 } from "./ticket-jobs";

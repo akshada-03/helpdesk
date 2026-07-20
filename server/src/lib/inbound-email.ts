@@ -21,6 +21,14 @@ export const inboundEmailSchema = z.object({
   text: z.string().max(1000).default(""),
   html: z.string().max(2000).default(""),
   envelope: z.string().optional(),
+  // RFC 5322 threading headers, used to route a customer's reply back to its ticket
+  // rather than opening a new one (see lib/ticket-intake). All optional: a first-
+  // contact email has none, and a provider that doesn't forward them just yields fresh
+  // tickets. `references` accumulates the whole thread's Message-IDs, so it's capped
+  // generously. The IMAP poller passes these directly; the webhook gets them here.
+  messageId: z.string().max(998).optional(),
+  inReplyTo: z.string().max(998).optional(),
+  references: z.string().max(8000).optional(),
 });
 
 // The raw inbound shape (what a caller may pass): `from` is required, the rest are

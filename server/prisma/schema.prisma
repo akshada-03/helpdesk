@@ -125,6 +125,12 @@ model Ticket {
   // Null for text-only emails (and all tickets predating this column). Rendered in
   // the UI only after DOMPurify sanitization — never trust it as safe markup.
   bodyHtml       String?
+  // Message-ID (RFC 5322) of the originating inbound email, when it carried one.
+  // Stored so outbound replies thread under the original message in the customer's
+  // mail client, and so a customer's email reply can be matched back to this ticket
+  // (see lib/ticket-intake). Null for tickets from sources without a Message-ID (the
+  // SendGrid webhook, and all tickets predating this column).
+  messageId      String?
   requesterEmail String
   requesterName  String?
   status         TicketStatus    @default(open)
