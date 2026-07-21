@@ -29,6 +29,27 @@ If the email does not arrive within 10 minutes, contact support.
 
 ------------------------------------------------------------------------
 
+### Q: I can't sign in to my account.
+
+Work through these steps in order:
+
+1.  Confirm you are using the **email address you purchased with**. Check
+    your receipt email if you are unsure — an account created with a
+    different address will not show your courses.
+2.  Reset your password using **Forgot Password** on the login page, even
+    if you are confident the current password is correct.
+3.  Check that Caps Lock is off. If your browser autofilled the password,
+    clear the field and type it manually.
+4.  Try a private/incognito window, or a different browser, to rule out a
+    cached session or a browser extension blocking the login.
+5.  Clear your browser's cache and cookies for the site, then try again.
+
+If you still cannot sign in after all five steps, reply with the email
+address on your account and what happens when you try, including any
+error message shown, and support will investigate.
+
+------------------------------------------------------------------------
+
 ## 2. Course Access & Purchases
 
 ### Q: I purchased a course but cannot see it.
