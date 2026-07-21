@@ -9,7 +9,17 @@ import {
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsUpDown,
+  Inbox,
+  Search,
+  SearchX,
+  X,
+} from "lucide-react";
 
 import {
   agentTicketStatuses,
@@ -48,29 +58,26 @@ const ALL = "all";
 // Rows per page. Server-side pagination, so this is sent as the `pageSize` param.
 const PAGE_SIZE = 10;
 
-// Badge styling per status. The list only ever shows agent-visible tickets, so
-// the `new`/`processing` intake states never actually render here — they're mapped
-// only to keep the record exhaustive over TicketStatus.
-const statusVariant: Record<
-  TicketStatus,
-  "default" | "secondary" | "outline"
-> = {
-  open: "default",
-  resolved: "secondary",
-  closed: "outline",
-  new: "outline",
-  processing: "outline",
+// Status chip colors. Ember is the one saturated color in the interface and it
+// means exactly one thing — a human still has to deal with this — so only `open`
+// gets it. Settled states read evergreen (resolved) or plain (closed). The list
+// only ever shows agent-visible tickets, so the `new`/`processing` intake states
+// never actually render here; they're mapped only to keep the record exhaustive
+// over TicketStatus.
+const statusChip: Record<TicketStatus, string> = {
+  open: "bg-ember-surface border-ember-border text-ember",
+  resolved: "bg-evergreen-surface border-evergreen-border text-primary",
+  closed: "bg-muted border-border text-muted-foreground",
+  new: "bg-muted border-border text-muted-foreground",
+  processing: "bg-muted border-border text-muted-foreground",
 };
 
-// "open" → "Open".
-function capitalize(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-// "general_question" → "General question"; null → "—".
+// "general_question" → "general question"; null → "—". Category is assigned by
+// the classifier, so it stays lowercase and renders in the mono utility face —
+// it reads as a field value the system holds, not as prose someone wrote.
 function formatCategory(category: TicketCategory | null): string {
   if (!category) return "—";
-  return capitalize(category.replace(/_/g, " "));
+  return category.replace(/_/g, " ");
 }
 
 // Meta stashed on the table so header cells can tell whether the query is loading
@@ -94,13 +101,17 @@ function SortHeader({
     <Button
       variant="ghost"
       size="sm"
-      className="-ml-3 h-8"
+      // The label classes are set here rather than inherited from the
+      // [data-slot="table-head"] base rule: Button declares its own font
+      // utilities, which win over an inherited value, so a sortable header would
+      // otherwise drop out of the mono utility register that plain headers use.
+      className="text-muted-foreground hover:text-foreground -ml-3 h-8 font-mono text-[0.6875rem] font-medium tracking-[0.1em] uppercase"
       onClick={column.getToggleSortingHandler()}
       disabled={isPending}
     >
       {label}
       <Icon
-        className={`size-3.5 ${sorted ? "text-foreground" : "text-muted-foreground"}`}
+        className={`size-3 ${sorted ? "text-foreground" : "text-muted-foreground"}`}
       />
     </Button>
   );
@@ -128,7 +139,7 @@ const columns: ColumnDef<TicketListItem>[] = [
       <>
         <div>{row.original.requesterName ?? row.original.requesterEmail}</div>
         {row.original.requesterName && (
-          <div className="text-muted-foreground text-xs">
+          <div className="text-muted-foreground u-data text-xs">
             {row.original.requesterEmail}
           </div>
         )}
@@ -139,7 +150,10 @@ const columns: ColumnDef<TicketListItem>[] = [
     accessorKey: "status",
     header: (ctx) => <SortHeader {...ctx} label="Status" />,
     cell: ({ row }) => (
-      <Badge variant={statusVariant[row.original.status]}>
+      <Badge
+        variant="outline"
+        className={`u-chip ${statusChip[row.original.status]}`}
+      >
         {row.original.status}
       </Badge>
     ),
@@ -148,7 +162,7 @@ const columns: ColumnDef<TicketListItem>[] = [
     accessorKey: "category",
     header: (ctx) => <SortHeader {...ctx} label="Category" />,
     cell: ({ row }) => (
-      <span className="text-muted-foreground">
+      <span className="text-muted-foreground u-data text-xs">
         {formatCategory(row.original.category)}
       </span>
     ),
@@ -169,7 +183,7 @@ const columns: ColumnDef<TicketListItem>[] = [
     accessorKey: "createdAt",
     header: (ctx) => <SortHeader {...ctx} label="Created" />,
     cell: ({ row }) => (
-      <span className="text-muted-foreground">
+      <span className="text-muted-foreground u-data text-xs">
         {new Date(row.original.createdAt).toLocaleDateString()}
       </span>
     ),
@@ -266,14 +280,20 @@ export default function TicketsTable() {
   // so the current filters are always adjustable.
   const filterBar = (
     <div className="flex flex-wrap items-center gap-2">
-      <Input
-        type="search"
-        placeholder="Search tickets…"
-        aria-label="Search tickets"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="w-full sm:w-64"
-      />
+      <div className="relative w-full sm:w-64">
+        <Search
+          className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
+          aria-hidden
+        />
+        <Input
+          type="search"
+          placeholder="Search tickets…"
+          aria-label="Search tickets"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full pl-8"
+        />
+      </div>
 
       <Select
         value={status}
@@ -285,8 +305,8 @@ export default function TicketsTable() {
         <SelectContent>
           <SelectItem value={ALL}>All statuses</SelectItem>
           {agentTicketStatuses.map((s) => (
-            <SelectItem key={s} value={s}>
-              {capitalize(s)}
+            <SelectItem key={s} value={s} className="u-data text-xs">
+              {s}
             </SelectItem>
           ))}
         </SelectContent>
@@ -302,7 +322,7 @@ export default function TicketsTable() {
         <SelectContent>
           <SelectItem value={ALL}>All categories</SelectItem>
           {ticketCategories.map((c) => (
-            <SelectItem key={c} value={c}>
+            <SelectItem key={c} value={c} className="u-data text-xs">
               {formatCategory(c)}
             </SelectItem>
           ))}
@@ -320,6 +340,7 @@ export default function TicketsTable() {
             setDebouncedSearch("");
           }}
         >
+          <X />
           Clear filters
         </Button>
       )}
@@ -364,12 +385,16 @@ export default function TicketsTable() {
       <ErrorAlert error={tickets.error} fallback="Failed to load tickets." />
     );
   } else if (rows.length === 0) {
+    const EmptyIcon = isFiltered ? SearchX : Inbox;
     content = (
-      <span className="text-muted-foreground text-sm">
-        {isFiltered
-          ? "No tickets match the current filters."
-          : "No tickets yet."}
-      </span>
+      <div className="flex flex-col items-center gap-3 rounded-md border border-dashed py-12">
+        <EmptyIcon className="text-muted-foreground size-6" aria-hidden />
+        <span className="text-muted-foreground text-sm">
+          {isFiltered
+            ? "No tickets match the current filters."
+            : "No tickets yet."}
+        </span>
+      </div>
     );
   } else {
     // Row range shown on the current page, e.g. "21–40 of 102".
@@ -395,7 +420,7 @@ export default function TicketsTable() {
         </div>
 
         <div className="flex items-center justify-between">
-          <p className="text-muted-foreground text-sm">
+          <p className="text-muted-foreground u-data text-xs">
             Showing {firstRow}–{lastRow} of {total}
           </p>
           <div className="flex items-center gap-2">
@@ -405,9 +430,10 @@ export default function TicketsTable() {
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1 || tickets.isFetching}
             >
+              <ChevronLeft />
               Previous
             </Button>
-            <span className="text-muted-foreground text-sm">
+            <span className="text-muted-foreground u-data text-xs">
               Page {page} of {pageCount}
             </span>
             <Button
@@ -417,6 +443,7 @@ export default function TicketsTable() {
               disabled={page >= pageCount || tickets.isFetching}
             >
               Next
+              <ChevronRight />
             </Button>
           </div>
         </div>

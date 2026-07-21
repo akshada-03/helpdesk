@@ -4,6 +4,20 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* Operations Console type roles. Inter carries human prose; JetBrains Mono
+     carries every machine-produced value (status, category, timestamps, counts)
+     so the typeface itself says who authored what. */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Ember — reserved for "a human still has to deal with this". */
+  --color-ember: var(--ember);
+  --color-ember-surface: var(--ember-surface);
+  --color-ember-border: var(--ember-border);
+  /* Evergreen — settled, no action needed. */
+  --color-evergreen-surface: var(--evergreen-surface);
+  --color-evergreen-border: var(--evergreen-border);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -42,72 +56,90 @@
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* Tight 4px corners. Surfaces are separated by hairlines, not shadows. */
+  --radius: 0.25rem;
+
+  --background: #f6f5f2; /* paper — warm dim gray */
+  --foreground: #1a1917; /* ink */
+  --card: #ffffff; /* panel */
+  --card-foreground: #1a1917;
+  --popover: #ffffff;
+  --popover-foreground: #1a1917;
+  --primary: #0f5c4a; /* evergreen */
+  --primary-foreground: #f6f5f2;
+  --secondary: #edebe5;
+  --secondary-foreground: #1a1917;
+  --muted: #edebe5;
+  --muted-foreground: #6e6a63;
+  --accent: #e8e5dd;
+  --accent-foreground: #1a1917;
+  --destructive: #a32b1c;
+  --border: #e2dfd8;
+  --input: #d8d4cb;
+  --ring: #0f5c4a;
+
+  --ember: #b4531a;
+  --ember-surface: #fbf0e6;
+  --ember-border: #e8c9ac;
+  --evergreen-surface: #e7f0ec;
+  --evergreen-border: #b9d4ca;
+
+  --chart-1: #0f5c4a;
+  --chart-2: #b4531a;
+  --chart-3: #4a8a76;
+  --chart-4: #c98a4b;
+  --chart-5: #6e6a63;
+
+  --sidebar: #f6f5f2;
+  --sidebar-foreground: #1a1917;
+  --sidebar-primary: #0f5c4a;
+  --sidebar-primary-foreground: #f6f5f2;
+  --sidebar-accent: #e8e5dd;
+  --sidebar-accent-foreground: #1a1917;
+  --sidebar-border: #e2dfd8;
+  --sidebar-ring: #0f5c4a;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #16150f;
+  --foreground: #edeae2;
+  --card: #1f1e1a;
+  --card-foreground: #edeae2;
+  --popover: #1f1e1a;
+  --popover-foreground: #edeae2;
+  --primary: #4fa88e;
+  --primary-foreground: #16150f;
+  --secondary: #2a2823;
+  --secondary-foreground: #edeae2;
+  --muted: #2a2823;
+  --muted-foreground: #a09b90;
+  --accent: #33302a;
+  --accent-foreground: #edeae2;
+  --destructive: #d4614a;
+  --border: #2e2c27;
+  --input: #3a3831;
+  --ring: #4fa88e;
+
+  --ember: #e0824a;
+  --ember-surface: #33241a;
+  --ember-border: #5c3a22;
+  --evergreen-surface: #172b25;
+  --evergreen-border: #2b4a40;
+
+  --chart-1: #4fa88e;
+  --chart-2: #e0824a;
+  --chart-3: #7cc4ac;
+  --chart-4: #d4a56b;
+  --chart-5: #a09b90;
+
+  --sidebar: #16150f;
+  --sidebar-foreground: #edeae2;
+  --sidebar-primary: #4fa88e;
+  --sidebar-primary-foreground: #16150f;
+  --sidebar-accent: #33302a;
+  --sidebar-accent-foreground: #edeae2;
+  --sidebar-border: #2e2c27;
+  --sidebar-ring: #4fa88e;
 }
 
 @layer base {
@@ -115,7 +147,72 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  /* Display role: headings run tight and dark. Inter's default tracking is too
+     loose at large sizes for the console register we're after. */
+  h1 {
+    letter-spacing: -0.022em;
+  }
+  h2,
+  h3 {
+    letter-spacing: -0.014em;
+  }
+
+  /* Column headers are labels for machine-held fields, so they take the mono
+     utility register rather than the body face. Applies to the sort <button>
+     inside too, since both properties inherit. */
+  [data-slot="table-head"] {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted-foreground);
+  }
+
+  /* Form labels name a field, same register as a column header — but they stay
+     at foreground weight since the field beside them is live. */
+  [data-slot="form-label"] {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+}
+
+@layer components {
+  /* Field labels and eyebrows: the interface naming its own fields. */
+  .u-label {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted-foreground);
+  }
+
+  /* Any value the system produced or holds — timestamps, counts, enum values. */
+  .u-data {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /* Status chip. Square-ish and tonal — a stamped field value, not a pill. */
+  .u-chip {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 3px;
+    border-width: 1px;
+    padding: 0.0625rem 0.375rem;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
   }
 
   /* Neutralize Chrome/WebKit autofill styling so inputs keep the theme's

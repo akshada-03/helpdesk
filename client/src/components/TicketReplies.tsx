@@ -48,15 +48,22 @@ function ReplyItem({ reply }: { reply: TicketReply }) {
     >
       <div className="flex items-baseline justify-between gap-2">
         <span className="flex items-center gap-2 text-sm font-medium">
-          <Badge variant={isAgent ? "secondary" : "outline"}>
-            {isAgent ? "Agent" : "Customer"}
+          <Badge
+            variant="outline"
+            className={
+              isAgent
+                ? "u-chip bg-evergreen-surface border-evergreen-border text-primary"
+                : "u-chip bg-muted border-border text-muted-foreground"
+            }
+          >
+            {isAgent ? "agent" : "customer"}
           </Badge>
           {/* Agent replies name the authoring user (falling back to "Agent" only
               if that user was since hard-deleted). Customer replies have no
               app-User author, so the badge alone identifies them. */}
           {isAgent && <span>{reply.author?.name ?? "Agent"}</span>}
         </span>
-        <span className="text-muted-foreground text-xs">
+        <span className="text-muted-foreground u-data text-xs">
           {new Date(reply.createdAt).toLocaleString()}
         </span>
       </div>
@@ -133,7 +140,7 @@ export default function TicketReplies({ ticketId }: { ticketId: number }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Replies</CardTitle>
+        <CardTitle className="u-label">Replies</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         {replies.isPending ? (

@@ -27,9 +27,9 @@ export default function TicketsPerDayChart({
 
   return (
     <figure>
-      <div className="text-muted-foreground mb-3 flex items-baseline justify-between text-sm">
-        <span>Tickets per day</span>
-        <span>Last 30 days · peak {peak}/day</span>
+      <div className="text-muted-foreground mb-3 flex items-baseline justify-between">
+        <span className="u-label">Tickets per day</span>
+        <span className="u-data text-xs">Last 30 days · peak {peak}/day</span>
       </div>
 
       <div
@@ -45,7 +45,7 @@ export default function TicketsPerDayChart({
               className="group relative flex h-full flex-1 items-end"
             >
               <div
-                className="bg-foreground w-full rounded-t-[3px] transition-opacity group-hover:opacity-80"
+                className="bg-primary w-full rounded-t-[2px] transition-opacity group-hover:opacity-70"
                 style={{
                   height:
                     d.count === 0 ? "0px" : `max(${heightPct}%, 3px)`,
@@ -75,7 +75,7 @@ export default function TicketsPerDayChart({
       </div>
 
       {/* X-axis: sparse date labels aligned under their bars. */}
-      <div className="text-muted-foreground mt-2 flex gap-[2px] text-xs">
+      <div className="text-muted-foreground u-data mt-2 flex gap-[2px] text-[0.6875rem]">
         {data.map((d, i) => (
           <div key={d.date} className="flex-1 text-center">
             {i % labelStep === 0 || i === data.length - 1 ? formatDay(d.date) : ""}

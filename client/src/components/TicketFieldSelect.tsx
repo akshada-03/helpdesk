@@ -58,7 +58,11 @@ export default function TicketFieldSelect({
         </SelectTrigger>
         <SelectContent>
           {options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
+            <SelectItem
+              key={option.value}
+              value={option.value}
+              className="u-data text-xs"
+            >
               {option.label}
             </SelectItem>
           ))}

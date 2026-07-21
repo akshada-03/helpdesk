@@ -1,8 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
+import {
+  ChartPie,
+  CircleDot,
+  Inbox,
+  Sparkles,
+  Timer,
+  type LucideIcon,
+} from "lucide-react";
 
 import type { TicketStatsResponse } from "core/schemas/tickets.ts";
 import { api } from "@/lib/api";
-import { useSession } from "@/lib/auth-client";
 import Navbar from "@/components/Navbar";
 import ErrorAlert from "@/components/ErrorAlert";
 import TicketsPerDayChart from "@/components/TicketsPerDayChart";
@@ -34,34 +41,38 @@ function formatDuration(ms: number): string {
   return hours ? `${days}d ${hours}h` : `${days}d`;
 }
 
-// One metric tile. `hint` is optional supporting text under the value.
+// One metric tile. `hint` is optional supporting text under the value; `icon`
+// names the metric alongside its label.
 function StatCard({
   label,
   value,
   hint,
+  icon: Icon,
 }: {
   label: string;
   value: string;
   hint?: string;
+  icon: LucideIcon;
 }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-muted-foreground text-sm font-medium">
+        <CardTitle className="u-label flex items-center gap-2">
+          <Icon className="size-3.5 shrink-0" aria-hidden />
           {label}
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="text-3xl font-semibold tabular-nums">{value}</div>
-        {hint && <p className="text-muted-foreground mt-1 text-sm">{hint}</p>}
+        <div className="u-data text-3xl font-semibold">{value}</div>
+        {hint && (
+          <p className="text-muted-foreground u-data mt-1.5 text-xs">{hint}</p>
+        )}
       </CardContent>
     </Card>
   );
 }
 
 export default function Home() {
-  const { data: session } = useSession();
-
   const stats = useQuery({
     queryKey: ["ticket-stats"],
     queryFn: async () =>
@@ -72,11 +83,9 @@ export default function Home() {
     <div className="min-h-svh">
       <Navbar />
       <main className="mx-auto max-w-5xl px-4 py-8">
-        <h1 className="text-2xl font-semibold">
-          Dashboard 
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Ticket volume and AI auto-resolution performance.
+        <h1 className="text-2xl font-semibold">Dashboard</h1>
+        <p className="text-muted-foreground mt-1 text-sm">
+          Ticket volume, and how much the queue is resolving on its own.
         </p>
 
         {stats.isError && (
@@ -101,15 +110,25 @@ export default function Home() {
 
           {stats.isSuccess && (
             <>
-              <StatCard label="Total tickets" value={String(stats.data.total)} />
-              <StatCard label="Open tickets" value={String(stats.data.open)} />
+              <StatCard
+                label="Total tickets"
+                value={String(stats.data.total)}
+                icon={Inbox}
+              />
+              <StatCard
+                label="Open tickets"
+                value={String(stats.data.open)}
+                icon={CircleDot}
+              />
               <StatCard
                 label="Resolved by AI"
                 value={String(stats.data.aiResolved)}
                 hint={`of ${stats.data.resolved} resolved`}
+                icon={Sparkles}
               />
               <StatCard
                 label="% resolved by AI"
+                icon={ChartPie}
                 value={
                   stats.data.resolved === 0
                     ? "—"
@@ -121,6 +140,7 @@ export default function Home() {
               />
               <StatCard
                 label="Avg resolution time"
+                icon={Timer}
                 value={
                   stats.data.avgResolutionMs === null
                     ? "—"
@@ -134,7 +154,7 @@ export default function Home() {
         {stats.isSuccess && stats.data.daily.length > 0 && (
           <Card className="mt-6">
             <CardHeader>
-              <CardTitle>Ticket volume</CardTitle>
+              <CardTitle className="u-label">Ticket volume</CardTitle>
             </CardHeader>
             <CardContent>
               <TicketsPerDayChart data={stats.data.daily} />

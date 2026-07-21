@@ -12,19 +12,21 @@ import TicketFieldSelect from "@/components/TicketFieldSelect";
 import { Card, CardContent } from "@/components/ui/card";
 
 // Display labels for each status/category. Explicit maps (rather than deriving
-// the label from the value) so the wording is fully under our control.
+// the label from the value) so the wording is fully under our control. They stay
+// lowercase to match how the same values render in the ticket list — these are
+// field values the system holds, and the mono utility face carries them.
 // Only the agent-settable statuses are offered in the editor; the `new`/
 // `processing` intake states are system-managed and never shown here.
 const statusLabels: Record<AgentTicketStatus, string> = {
-  open: "Open",
-  resolved: "Resolved",
-  closed: "Closed",
+  open: "open",
+  resolved: "resolved",
+  closed: "closed",
 };
 
 const categoryLabels: Record<TicketCategory, string> = {
-  general_question: "General Question",
-  technical_question: "Technical Question",
-  refund_request: "Refund Request",
+  general_question: "general question",
+  technical_question: "technical question",
+  refund_request: "refund request",
 };
 
 // The editable properties for a ticket — status, category, and assignee. Status
@@ -40,7 +42,7 @@ export default function UpdateTicket({ ticket }: { ticket: TicketDetailData }) {
       <CardContent>
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-muted-foreground text-xs font-medium">
+            <label className="u-label">
               Status
             </label>
             <TicketFieldSelect
@@ -56,7 +58,7 @@ export default function UpdateTicket({ ticket }: { ticket: TicketDetailData }) {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-muted-foreground text-xs font-medium">
+            <label className="u-label">
               Category
             </label>
             <TicketFieldSelect
@@ -73,7 +75,7 @@ export default function UpdateTicket({ ticket }: { ticket: TicketDetailData }) {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-muted-foreground text-xs font-medium">
+            <label className="u-label">
               Assigned to
             </label>
             {isAdmin ? (

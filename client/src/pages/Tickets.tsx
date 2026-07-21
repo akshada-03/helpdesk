@@ -8,7 +8,7 @@ export default function Tickets() {
       <main className="mx-auto max-w-5xl px-4 py-8">
         <div>
           <h1 className="text-2xl font-semibold">Tickets</h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-muted-foreground mt-1 text-sm">
             Support requests, newest first.
           </p>
         </div>

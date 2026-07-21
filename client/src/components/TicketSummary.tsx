@@ -68,7 +68,7 @@ export default function TicketSummary({ ticketId }: { ticketId: number }) {
           survives a failed regenerate too, alongside the error. */}
       {summary && (
         <div className="bg-muted/50 space-y-1 rounded-md p-3">
-          <h3 className="text-muted-foreground text-xs font-medium">Summary</h3>
+          <h3 className="u-label">Summary</h3>
           {/* The summary can come back as multiple lines or bullet points, so
               preserve its newlines rather than collapsing them into one block —
               matching how the message body and replies are rendered. */}

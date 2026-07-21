@@ -144,7 +144,7 @@ describe("TicketsTable", () => {
     expect(within(row).getByText("Jane Doe")).toBeInTheDocument();
     expect(within(row).getByText("jane@example.com")).toBeInTheDocument();
     expect(within(row).getByText("open")).toBeInTheDocument();
-    expect(within(row).getByText("Technical question")).toBeInTheDocument();
+    expect(within(row).getByText("technical question")).toBeInTheDocument();
   });
 
   it("links each subject to its ticket detail page", async () => {
@@ -220,7 +220,7 @@ describe("TicketsTable", () => {
     await screen.findByText("Cannot log in");
 
     await u.click(screen.getByRole("combobox", { name: "Filter by status" }));
-    await u.click(await screen.findByRole("option", { name: "Resolved" }));
+    await u.click(await screen.findByRole("option", { name: "resolved" }));
 
     await waitFor(() =>
       expect(mockedAxios.get).toHaveBeenLastCalledWith("/api/tickets", {
@@ -238,7 +238,7 @@ describe("TicketsTable", () => {
 
     await u.click(screen.getByRole("combobox", { name: "Filter by category" }));
     await u.click(
-      await screen.findByRole("option", { name: "Technical question" }),
+      await screen.findByRole("option", { name: "technical question" }),
     );
 
     await waitFor(() =>
@@ -260,7 +260,7 @@ describe("TicketsTable", () => {
     await screen.findByText("Cannot log in");
 
     await u.click(screen.getByRole("combobox", { name: "Filter by status" }));
-    await u.click(await screen.findByRole("option", { name: "Open" }));
+    await u.click(await screen.findByRole("option", { name: "open" }));
     await waitFor(() =>
       expect(mockedAxios.get).toHaveBeenLastCalledWith("/api/tickets", {
         params: paged({ sortBy: "createdAt", order: "desc", status: "open" }),
@@ -352,7 +352,7 @@ describe("TicketsTable", () => {
 
     // Changing the status filter should snap back to page 1.
     await u.click(screen.getByRole("combobox", { name: "Filter by status" }));
-    await u.click(await screen.findByRole("option", { name: "Open" }));
+    await u.click(await screen.findByRole("option", { name: "open" }));
     await waitFor(() =>
       expect(mockedAxios.get).toHaveBeenLastCalledWith("/api/tickets", {
         params: paged({ sortBy: "createdAt", order: "desc", status: "open" }),
@@ -368,7 +368,7 @@ describe("TicketsTable", () => {
     await screen.findByText("No tickets yet.");
 
     await u.click(screen.getByRole("combobox", { name: "Filter by status" }));
-    await u.click(await screen.findByRole("option", { name: "Closed" }));
+    await u.click(await screen.findByRole("option", { name: "closed" }));
 
     expect(
       await screen.findByText("No tickets match the current filters."),

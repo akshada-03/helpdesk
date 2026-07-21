@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, UserX } from "lucide-react";
 
 import { Role } from "core/constants/role.ts";
 import type { UserListItem, UserListResponse } from "core/schemas/users.ts";
@@ -89,7 +89,10 @@ export default function UsersTable() {
 
   if (users.data.length === 0) {
     return (
-      <span className="text-muted-foreground text-sm">No users found.</span>
+      <div className="flex flex-col items-center gap-3 rounded-md border border-dashed py-12">
+        <UserX className="text-muted-foreground size-6" aria-hidden />
+        <span className="text-muted-foreground text-sm">No users found.</span>
+      </div>
     );
   }
 
@@ -102,17 +105,22 @@ export default function UsersTable() {
             {users.data.map((user) => (
               <TableRow key={user.id}>
                 <TableCell className="font-medium">{user.name}</TableCell>
-                <TableCell className="text-muted-foreground">
+                <TableCell className="text-muted-foreground u-data text-xs">
                   {user.email}
                 </TableCell>
                 <TableCell>
                   <Badge
-                    variant={user.role === Role.admin ? "default" : "secondary"}
+                    variant="outline"
+                    className={
+                      user.role === Role.admin
+                        ? "u-chip bg-evergreen-surface border-evergreen-border text-primary"
+                        : "u-chip bg-muted border-border text-muted-foreground"
+                    }
                   >
                     {user.role}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-muted-foreground">
+                <TableCell className="text-muted-foreground u-data text-xs">
                   {new Date(user.createdAt).toLocaleDateString()}
                 </TableCell>
                 <TableCell className="text-right">

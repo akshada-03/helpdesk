@@ -65,10 +65,10 @@ describe("TicketReplies", () => {
     renderWithQuery(<TicketReplies ticketId={103} />);
 
     await screen.findByText(reply.body);
-    // Agent reply carries the author's name + an "Agent" badge; the customer
-    // reply (no app-User author) is labelled "Customer".
-    expect(screen.getByText("Agent")).toBeInTheDocument();
-    expect(screen.getByText("Customer")).toBeInTheDocument();
+    // Agent reply carries the author's name + an "agent" badge; the customer
+    // reply (no app-User author) is labelled "customer".
+    expect(screen.getByText("agent")).toBeInTheDocument();
+    expect(screen.getByText("customer")).toBeInTheDocument();
     expect(screen.getByText(customerReply.body)).toBeInTheDocument();
   });
 

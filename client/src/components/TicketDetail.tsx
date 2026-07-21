@@ -13,9 +13,9 @@ import TicketSummary from "@/components/TicketSummary";
 // A single labelled field in the metadata grid.
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-1">
-      <dt className="text-muted-foreground text-xs font-medium">{label}</dt>
-      <dd className="text-sm">{children}</dd>
+    <div className="space-y-1.5">
+      <dt className="u-label">{label}</dt>
+      <dd className="u-data text-sm">{children}</dd>
     </div>
   );
 }
@@ -44,19 +44,19 @@ export default function TicketDetail({ ticket }: { ticket: TicketDetailData }) {
             email address when a name is present. */}
         <p className="text-muted-foreground text-xs">
           From{" "}
-          <span className="text-foreground">
+          <span className="text-foreground font-medium">
             {ticket.requesterName ?? ticket.requesterEmail}
           </span>
           {ticket.requesterName && (
             <>
               {" "}
-              <span>{ticket.requesterEmail}</span>
+              <span className="u-data">{ticket.requesterEmail}</span>
             </>
           )}
         </p>
 
-        <div className="space-y-1">
-          <h2 className="text-muted-foreground text-xs font-medium">Message</h2>
+        <div className="space-y-1.5">
+          <h2 className="u-label">Message</h2>
           {cleanHtml !== null ? (
             // Sanitized via DOMPurify above — safe to inject as markup.
             <div

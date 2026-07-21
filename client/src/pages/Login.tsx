@@ -2,7 +2,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { Navigate, useNavigate } from "react-router-dom";
-import { Loader2 } from "lucide-react";
+import { LifeBuoy, Loader2 } from "lucide-react";
 import { z } from "zod/v4";
 
 import { signIn, useSession } from "@/lib/auth-client";
@@ -66,9 +66,12 @@ export default function Login() {
     <div className="flex min-h-svh items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>Sign in to Helpdesk</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-lg tracking-[-0.014em]">
+            <LifeBuoy className="text-primary size-5 shrink-0" aria-hidden />
+            Sign in to Helpdesk
+          </CardTitle>
           <CardDescription>
-            Enter your credentials to access your account.
+            Accounts are created by an admin. Ask yours if you need access.
           </CardDescription>
         </CardHeader>
         <CardContent>
