@@ -1,0 +1,28 @@
+node_modules
+**/node_modules
+
+# Rebuilt inside the image — never ship the host's copies.
+client/dist
+server/src/generated
+
+.git
+.gitignore
+.claude
+.agents
+
+# Playwright suite isn't run in the deployed image (its package.json is still
+# copied in the Dockerfile so npm ci can resolve the workspace).
+e2e/tests
+e2e/playwright.config.ts
+e2e/test-results
+e2e/playwright-report
+
+**/.env
+**/.env.*
+!**/.env.example
+
+*.md
+Dockerfile
+.dockerignore
+**/*.test.ts
+**/*.test.tsx

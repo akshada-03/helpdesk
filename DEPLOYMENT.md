@@ -1,0 +1,209 @@
+# Deploying Helpdesk for free
+
+## The shape of the problem
+
+This app is **not** serverless-friendly, and that drives every choice below:
+
+- `pg-boss` workers (`classify-ticket`, `auto-resolve-ticket`) need a **long-running process**.
+- The IMAP poller (`startInboundEmailPolling`) is an interval loop — same requirement.
+- Prisma + Postgres need a real connection, not an edge runtime.
+
+So Vercel/Netlify *functions* are out for the API. We need one always-on container plus a Postgres.
+
+## Recommended stack (all free, no credit card)
+
+| Piece | Service | Free tier |
+|---|---|---|
+| Postgres | **Neon** | 0.5 GB, permanently free |
+| API + client | **Render** web service (Docker) | 512 MB, 750 instance-hours/month |
+| AI | Google AI Studio (already configured) | free Gemini key |
+| Email | Gmail + App Password | free |
+| Errors | Sentry | 5k events/month |
+
+**One service, not two.** The API also serves the built client. This is deliberate: it puts the
+client and the API on the **same origin**, which sidesteps the cross-site cookie problem entirely
+(see "Why same-origin" below). Render's free Postgres expires after 30 days, which is why the
+database lives on Neon instead.
+
+### The one real tradeoff
+
+Render's free tier **spins down after 15 minutes of inactivity**. While asleep:
+
+- the first request afterwards takes ~50 s (cold start),
+- **background jobs don't run** — inbound email isn't polled, tickets aren't classified.
+
+Tickets already in the queue are picked up when it wakes; nothing is lost, just delayed. If that
+matters, ping the service every 10 min with a free UptimeRobot monitor — 720 h/month of uptime fits
+inside the 750-hour allowance, but only for a *single* free service.
+
+---
+
+## Step 1 — Database on Neon
+
+1. Sign up at <https://neon.tech> → create project `helpdesk` (pick the region nearest your Render region).
+2. Copy the **pooled** connection string. It looks like:
+   ```
+   postgresql://user:pass@ep-xxx-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require
+   ```
+3. From your machine, point the server at it and push the schema + seed the admin:
+
+   ```bash
+   cd server
+   # temporarily, in server/.env
+   # DATABASE_URL="postgresql://...-pooler...?sslmode=require"
+   npx prisma migrate deploy
+   npm run db:seed
+   ```
+
+   Seeding locally is the workaround for the free tier having no shell access. `SEED_ADMIN_EMAIL` /
+   `SEED_ADMIN_PASSWORD` from your `.env` become your login — set them to something real first.
+
+`pg-boss` creates its own `pgboss` schema on boot; no migration needed.
+
+---
+
+## Step 2 — Code changes (already applied)
+
+These are committed to the repo — this section documents what changed and why.
+
+### 2a. Serve the built client from Express
+
+`server/src/index.ts` had a catch-all 404 that swallowed every non-API route. It's now scoped to
+`/api`, with static serving and an SPA fallback behind an `isProduction` guard (in dev the client
+runs its own server with HMR, so this must not intercept):
+
+```ts
+if (isProduction) {
+  const clientDist = path.resolve(import.meta.dirname, "../../client/dist");
+  app.use(express.static(clientDist));
+  app.get("/{*any}", (_req, res) => {
+    res.sendFile(path.join(clientDist, "index.html"));
+  });
+}
+```
+
+Note the **named** wildcard `/{*any}` — Express 5's matcher throws at boot on a bare `*`.
+
+### 2b. API URL resolved at runtime, not baked at build time
+
+`client/src/lib/config.ts` fell back to `http://localhost:3001`, which would have shipped to
+production. Rather than substituting a URL at build time, it now derives the origin at runtime:
+
+```ts
+export const API_URL =
+  explicitApiUrl ||
+  (isBrowser && !isLocalhost ? window.location.origin : "http://localhost:3001");
+```
+
+This is a deliberate change from the build-time `--define` approach originally sketched here.
+`--define` would have meant a Docker build arg, shell-quoting that behaves differently on Windows
+than in the Linux image, and a substitution that may not even match through `config.ts`'s
+`process.env?.` optional chaining. Deriving the origin at runtime removes all of that, and makes the
+image **portable** — the same build works on a Render URL, a preview URL, or a custom domain with no
+rebuild. An explicit `API_URL` still takes precedence, so a split deploy remains possible.
+
+### 2c. Dockerfile
+
+Render has no native Bun runtime, so the repo now has a root `Dockerfile` and `.dockerignore`.
+Two details worth knowing:
+
+- `prisma generate` runs at **build** time — its output (`server/src/generated/prisma`) is imported
+  by `src/db.ts` at runtime, so generating on boot would be too late.
+- The start command runs `prisma migrate deploy` before the server. It's idempotent, so it's safe on
+  every boot and restart.
+
+---
+
+## Step 3 — Deploy on Render
+
+1. Push to GitHub (Render deploys from a repo).
+2. <https://render.com> → **New → Web Service** → connect the repo.
+3. Runtime **Docker**, instance type **Free**.
+4. Render assigns the URL (`https://helpdesk-xxxx.onrender.com`) when you create the service — you
+   can see it before the first build finishes. You need it for the env vars below.
+5. Under **Environment**, add:
+
+   ```
+   NODE_ENV=production
+   DATABASE_URL=<Neon pooled connection string>
+   BETTER_AUTH_SECRET=<openssl rand -base64 32>
+   BETTER_AUTH_URL=https://helpdesk-xxxx.onrender.com
+   CLIENT_URL=https://helpdesk-xxxx.onrender.com
+   API_BASE_URL=https://helpdesk-xxxx.onrender.com
+   ```
+
+   `CLIENT_URL` and `API_BASE_URL` are **required in production** — `server/src/lib/env.ts` throws at
+   boot if either is missing. Same origin for all three, since one service serves both.
+
+   No `API_URL` and no Docker build arguments are needed — see 2b.
+
+6. Render sets `PORT` itself; `index.ts` reads it (`process.env.PORT ?? 3001`), so it just works.
+
+Optional, all safe to omit — the app boots and runs without them:
+
+```
+AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+AI_MODEL=gemini-flash-lite-latest
+AI_API_KEY=<free key from https://aistudio.google.com/apikey>
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=you@gmail.com
+SMTP_PASS=<16-char Gmail App Password>
+IMAP_HOST=imap.gmail.com
+WEBHOOK_SECRET=<long random string>
+SENTRY_DSN=<from sentry.io>
+```
+
+Without `AI_*`, ticket classification and reply polishing return 502 but nothing else breaks.
+Without SMTP/IMAP, replies are saved and shown in the UI but never emailed.
+
+---
+
+## Why same-origin (the trap this avoids)
+
+If you split the client onto Cloudflare Pages and the API onto Render, they're different registrable
+domains, so the session cookie becomes **cross-site**. Better Auth defaults to `SameSite=Lax`, and
+browsers refuse to send a Lax cookie cross-site — you'd sign in successfully and then be treated as
+logged out on every subsequent request. Fixing it means adding to `server/src/lib/auth.ts`:
+
+```ts
+advanced: {
+  useSecureCookies: isProduction,
+  defaultCookieAttributes: isProduction
+    ? { sameSite: "none", secure: true, partitioned: true }
+    : undefined,
+},
+```
+
+That works, but `SameSite=None` is strictly worse for CSRF and browsers keep tightening third-party
+cookie rules. Serving both from one origin avoids the whole category. Only split them if you
+specifically want the client on a CDN that never sleeps.
+
+---
+
+## Verifying the deploy
+
+```bash
+# Public health endpoint (routes.ts mounts it before the requireAuth guard).
+curl https://helpdesk-xxxx.onrender.com/api/health   # {"status":"ok","timestamp":"..."}
+
+# Auth guard is active.
+curl -i https://helpdesk-xxxx.onrender.com/api/tickets   # expect 401
+
+# SPA fallback: a deep client route returns index.html, not a 404.
+curl -i https://helpdesk-xxxx.onrender.com/tickets/1   # expect 200 text/html
+```
+
+Then open the URL, sign in with your seeded admin credentials, and check Render's **Logs** tab for
+`API server listening on…`. If boot fails, the usual causes are a missing `CLIENT_URL`/`API_BASE_URL`
+(fatal by design) or a `DATABASE_URL` without `?sslmode=require`.
+
+## Other free options, briefly
+
+- **Fly.io** — better than Render technically (no spin-down on the hobby allowance), but now requires
+  a card on file.
+- **Railway** — $5 one-time trial credit, then paid. Fine for a demo, not ongoing.
+- **Koyeb** — one free instance, no card, no sleep. Good Render alternative if the cold starts annoy you.
+- **Supabase** instead of Neon — also free Postgres; Neon is suggested only because its pooled
+  connection string works with Prisma out of the box.

@@ -1,12 +1,14 @@
 // Must be imported first so Sentry can instrument modules as they load.
 import "./instrument";
 
+import path from "node:path";
+
 import * as Sentry from "@sentry/node";
 import express from "express";
 import cors from "cors";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth";
-import { CLIENT_URL } from "./lib/env";
+import { CLIENT_URL, isProduction } from "./lib/env";
 import {
   startInboundEmailPolling,
   stopInboundEmailPolling,
@@ -27,10 +29,29 @@ app.use(express.json());
 
 app.use("/api", apiRouter);
 
-// 404 fallback for unknown API routes
-app.use((_req, res) => {
+// 404 fallback for unknown API routes. Scoped to /api so that non-API paths fall
+// through to the client below instead of being answered with JSON.
+app.use("/api", (_req, res) => {
   res.status(404).json({ error: "Not found" });
 });
+
+// --- Client (production) ---
+// In production this server also serves the built React app, so the client and
+// API share an origin. That keeps the Better Auth session cookie same-site: it
+// would otherwise need SameSite=None to survive a cross-origin request. In dev
+// the client runs its own server (client/serve.ts) with HMR, so skip this.
+if (isProduction) {
+  const clientDist = path.resolve(import.meta.dirname, "../../client/dist");
+
+  app.use(express.static(clientDist));
+
+  // SPA fallback: any non-API, non-asset path is a client-side route, so hand
+  // back index.html and let React Router resolve it. Express 5 requires named
+  // wildcards — a bare "*" throws at boot.
+  app.get("/{*any}", (_req, res) => {
+    res.sendFile(path.join(clientDist, "index.html"));
+  });
+}
 
 // Sentry's Express error handler — must come after all routes and before any
 // other error-handling middleware. Captures errors thrown by (or forwarded from)
