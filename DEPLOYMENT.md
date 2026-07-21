@@ -41,9 +41,25 @@ inside the 750-hour allowance, but only for a *single* free service.
 ## Step 1 — Database on Neon
 
 1. Sign up at <https://neon.tech> → create project `helpdesk` (pick the region nearest your Render region).
-2. Copy the **pooled** connection string. It looks like:
+2. Copy the **pooled** connection string and append `connect_timeout=15`:
    ```
-   postgresql://user:pass@ep-xxx-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require
+   postgresql://user:pass@ep-xxx-pooler.c-10.us-east-1.aws.neon.tech/neondb?sslmode=require&connect_timeout=15
+   ```
+
+   All three parts matter, and getting any of them wrong produces the *same* unhelpful
+   `P1001: Can't reach database server` — which reads like a network outage when it isn't:
+
+   - **`-pooler` in the hostname.** The direct endpoint is a different host.
+   - **`sslmode=require`.** Neon refuses plaintext connections, and Prisma reports that refusal
+     as P1001 rather than a TLS error.
+   - **`connect_timeout=15`.** Neon's free compute suspends after ~5 min idle; the first
+     connection must wake it, and Prisma's 5-second default can expire mid-wake. Without this
+     you get *intermittent* P1001s, which are far worse to debug.
+
+   Before putting the string in Render, prove it works from your machine:
+   ```powershell
+   $env:DATABASE_URL="postgresql://...-pooler...?sslmode=require&connect_timeout=15"
+   bunx prisma migrate deploy
    ```
 3. From your machine, point the server at it and push the schema + seed the admin:
 
@@ -105,12 +121,21 @@ rebuild. An explicit `API_URL` still takes precedence, so a split deploy remains
 ### 2c. Dockerfile
 
 Render has no native Bun runtime, so the repo now has a root `Dockerfile` and `.dockerignore`.
-Two details worth knowing:
+Four details worth knowing:
 
+- **`oven/bun` ships no Node.js — `npm` and `npx` do not exist in the image.** Every step must use
+  `bun` / `bunx`, or the build dies with `npm: not found` (exit 127).
+- Install is plain `bun install`, not `--frozen-lockfile`: the committed lockfile is
+  `package-lock.json` and there's no `bun.lock`, so there's nothing to freeze against. Bun reads and
+  migrates `package-lock.json`, so resolutions still come from the committed lockfile.
 - `prisma generate` runs at **build** time — its output (`server/src/generated/prisma`) is imported
-  by `src/db.ts` at runtime, so generating on boot would be too late.
-- The start command runs `prisma migrate deploy` before the server. It's idempotent, so it's safe on
-  every boot and restart.
+  by `src/db.ts` at runtime, so generating on boot would be too late. It gets a placeholder
+  `DATABASE_URL` because `.dockerignore` excludes `.env` and `prisma.config.ts` requires the var;
+  generate only reads the schema, so the value is never used.
+- The start command runs `prisma migrate deploy` before the server. It's idempotent and safe to
+  repeat, but note it **blocks boot**: if the database is unreachable the server never starts, and
+  Render reports the confusing "No open ports detected" rather than a database error. Look above
+  that message for the real cause.
 
 ---
 
@@ -119,7 +144,7 @@ Two details worth knowing:
 1. Push to GitHub (Render deploys from a repo).
 2. <https://render.com> → **New → Web Service** → connect the repo.
 3. Runtime **Docker**, instance type **Free**.
-4. Render assigns the URL (`https://helpdesk-xxxx.onrender.com`) when you create the service — you
+4. Render assigns the URL (`https://helpdesk-b8hm.onrender.com`) when you create the service — you
    can see it before the first build finishes. You need it for the env vars below.
 5. Under **Environment**, add:
 
@@ -127,9 +152,9 @@ Two details worth knowing:
    NODE_ENV=production
    DATABASE_URL=<Neon pooled connection string>
    BETTER_AUTH_SECRET=<openssl rand -base64 32>
-   BETTER_AUTH_URL=https://helpdesk-xxxx.onrender.com
-   CLIENT_URL=https://helpdesk-xxxx.onrender.com
-   API_BASE_URL=https://helpdesk-xxxx.onrender.com
+   BETTER_AUTH_URL=https://helpdesk-b8hm.onrender.com
+   CLIENT_URL=https://helpdesk-b8hm.onrender.com
+   API_BASE_URL=https://helpdesk-b8hm.onrender.com
    ```
 
    `CLIENT_URL` and `API_BASE_URL` are **required in production** — `server/src/lib/env.ts` throws at
@@ -186,13 +211,13 @@ specifically want the client on a CDN that never sleeps.
 
 ```bash
 # Public health endpoint (routes.ts mounts it before the requireAuth guard).
-curl https://helpdesk-xxxx.onrender.com/api/health   # {"status":"ok","timestamp":"..."}
+curl https://helpdesk-b8hm.onrender.com/api/health   # {"status":"ok","timestamp":"..."}
 
 # Auth guard is active.
-curl -i https://helpdesk-xxxx.onrender.com/api/tickets   # expect 401
+curl -i https://helpdesk-b8hm.onrender.com/api/tickets   # expect 401
 
 # SPA fallback: a deep client route returns index.html, not a 404.
-curl -i https://helpdesk-xxxx.onrender.com/tickets/1   # expect 200 text/html
+curl -i https://helpdesk-b8hm.onrender.com/tickets/1   # expect 200 text/html
 ```
 
 Then open the URL, sign in with your seeded admin credentials, and check Render's **Logs** tab for
