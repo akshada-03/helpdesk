@@ -41,5 +41,20 @@ RUN cd client && bun run build
 ENV NODE_ENV=production
 EXPOSE 3001
 
-# migrate deploy is idempotent — safe to run on every boot/restart.
-CMD ["sh", "-c", "cd server && bunx prisma migrate deploy && bun src/index.ts"]
+# Start the server only — migrations are NOT run here, deliberately.
+#
+# `prisma migrate deploy` takes a postgres advisory lock, which is session-scoped.
+# DATABASE_URL points at Neon's -pooler endpoint (PgBouncer, transaction pooling),
+# where consecutive statements can land on different backend connections, so the
+# lock never resolves and migrate dies with P1002 after 10s. That failure also
+# fed itself: the crash triggered a restart, and restarting containers contended
+# for the same lock.
+#
+# Migrating from a deploy is the wrong shape here anyway — it blocks boot, so a
+# transient database issue means the service never starts at all. Run migrations
+# from a workstation before deploying (see DEPLOYMENT.md step 3):
+#
+#   cd server && bunx prisma migrate deploy
+#
+# That connection is a normal session, so the advisory lock works correctly.
+CMD ["sh", "-c", "cd server && bun src/index.ts"]

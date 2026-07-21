@@ -132,10 +132,24 @@ Four details worth knowing:
   by `src/db.ts` at runtime, so generating on boot would be too late. It gets a placeholder
   `DATABASE_URL` because `.dockerignore` excludes `.env` and `prisma.config.ts` requires the var;
   generate only reads the schema, so the value is never used.
-- The start command runs `prisma migrate deploy` before the server. It's idempotent and safe to
-  repeat, but note it **blocks boot**: if the database is unreachable the server never starts, and
-  Render reports the confusing "No open ports detected" rather than a database error. Look above
-  that message for the real cause.
+- **The container does not run migrations.** It only starts the server. `prisma migrate deploy`
+  takes a session-scoped postgres advisory lock, and `DATABASE_URL` points at Neon's `-pooler`
+  endpoint (PgBouncer, transaction pooling) where consecutive statements may land on different
+  backend connections — so the lock never resolves and migrate fails with
+  `P1002 ... Timed out trying to acquire a postgres advisory lock`. Migrating at boot also blocks
+  startup, so a database blip means the service never starts and Render reports the misleading
+  "No open ports detected".
+
+  **Run migrations from your machine before deploying** whenever you add one:
+
+  ```bash
+  cd server && bunx prisma migrate deploy
+  ```
+
+  That's an ordinary session connection, so the advisory lock behaves. Note the split: pooled URL
+  for the *running app*, and migrations from a workstation. If you ever want migrations automated,
+  add a second `DIRECT_URL` env var pointing at Neon's non-pooled endpoint and use it for migrate
+  only — don't point the app itself at the direct endpoint.
 
 ### 2d. Client builds through `build.ts`, not the `bun build` CLI
 
