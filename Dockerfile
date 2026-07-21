@@ -17,13 +17,24 @@ COPY core/package.json ./core/
 COPY client/package.json ./client/
 COPY server/package.json ./server/
 COPY e2e/package.json ./e2e/
+
+# npm, not `bun install --frozen-lockfile`: this repo's committed lockfile is
+# package-lock.json and there is no bun.lock, so a frozen bun install has nothing
+# to freeze against and fails the build. Bun is still the runtime and bundler
+# below — only the installer is npm. Switch this back to bun once a bun.lock is
+# generated and committed.
 RUN npm ci
 
 COPY . .
 
 # Generated into server/src/generated/prisma — imported at runtime by src/db.ts,
 # so this must happen at build time, not on boot.
-RUN cd server && npx prisma generate
+#
+# The placeholder DATABASE_URL satisfies prisma.config.ts's env("DATABASE_URL")
+# without connecting to anything: generate reads the schema only, and no real
+# database exists at build time. The real value comes from Render's environment
+# at runtime, for the migrate step below.
+RUN cd server && DATABASE_URL="postgresql://placeholder" bunx prisma generate
 
 # No API URL baked in: the client derives it from window.location at runtime
 # (client/src/lib/config.ts), so this image is portable across hosts.
@@ -33,4 +44,4 @@ ENV NODE_ENV=production
 EXPOSE 3001
 
 # migrate deploy is idempotent — safe to run on every boot/restart.
-CMD ["sh", "-c", "cd server && npx prisma migrate deploy && bun src/index.ts"]
+CMD ["sh", "-c", "cd server && bunx prisma migrate deploy && bun src/index.ts"]
