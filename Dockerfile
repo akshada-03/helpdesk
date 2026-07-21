@@ -10,20 +10,18 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 # Dependencies first, so edits to source don't invalidate the install layer.
-# Installed with npm: the repo's lockfile is package-lock.json, and npm resolves
-# the Bun workspaces (core/client/server) from the root package.json just fine.
 COPY package.json package-lock.json ./
 COPY core/package.json ./core/
 COPY client/package.json ./client/
 COPY server/package.json ./server/
 COPY e2e/package.json ./e2e/
 
-# npm, not `bun install --frozen-lockfile`: this repo's committed lockfile is
-# package-lock.json and there is no bun.lock, so a frozen bun install has nothing
-# to freeze against and fails the build. Bun is still the runtime and bundler
-# below — only the installer is npm. Switch this back to bun once a bun.lock is
-# generated and committed.
-RUN npm ci
+# The bun image ships no Node.js, so npm/npx do not exist here — every step must
+# go through bun/bunx. Plain `bun install`, not `--frozen-lockfile`: the repo's
+# committed lockfile is package-lock.json and there is no bun.lock, so a frozen
+# install has nothing to freeze against. Bun reads and migrates package-lock.json,
+# so resolutions still come from the committed lockfile, not a fresh solve.
+RUN bun install
 
 COPY . .
 
