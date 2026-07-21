@@ -137,6 +137,24 @@ Four details worth knowing:
   Render reports the confusing "No open ports detected" rather than a database error. Look above
   that message for the real cause.
 
+### 2d. Client builds through `build.ts`, not the `bun build` CLI
+
+`client/bunfig.toml` registers `bun-plugin-tailwind` under `[serve.static]`, which applies **only to
+the dev server** in `serve.ts`. The `bun build` CLI never reads it, so the production bundle shipped
+with `@tailwind` / `@theme` directives untouched and zero utility classes — localhost looked perfect
+while the deployed site rendered completely unstyled.
+
+The build now goes through `client/build.ts`, which passes the plugin explicitly via `Bun.build()`.
+If you ever change the build command, keep the plugin — and verify with:
+
+```bash
+cd client && bun run build
+grep -c '\.flex{' dist/*.css   # must be ≥ 1; zero means Tailwind didn't run
+```
+
+The telltale sign at build time is `warn: invalid @ rule encountered: '@tailwind'`. It's a warning,
+not an error, so the build "succeeds" and the breakage only shows up in the browser.
+
 ---
 
 ## Step 3 — Deploy on Render
