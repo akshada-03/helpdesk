@@ -17,12 +17,10 @@
       (function () {
         try {
           var saved = localStorage.getItem("theme");
-          var dark = saved
-            ? saved === "dark"
-            : window.matchMedia("(prefers-color-scheme: dark)").matches;
+          var dark = saved ? saved === "dark" : true;
           document.documentElement.classList.toggle("dark", dark);
         } catch (e) {
-          /* private mode / no storage — fall through to the light default */
+          document.documentElement.classList.add("dark");
         }
       })();
     </script>

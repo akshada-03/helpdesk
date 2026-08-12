@@ -25,6 +25,7 @@ import {
 import ErrorAlert from "@/components/ErrorAlert";
 import ErrorMessage from "@/components/ErrorMessage";
 import FullPageSpinner from "@/components/FullPageSpinner";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const loginSchema = z.object({
   email: z.string().min(1, "Email is required").email("Enter a valid email"),
@@ -63,18 +64,32 @@ export default function Login() {
   if (session) return <Navigate to="/" replace />;
 
   return (
-    <div className="flex min-h-svh items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg tracking-[-0.014em]">
-            <LifeBuoy className="text-primary size-5 shrink-0" aria-hidden />
-            Sign in to Helpdesk
-          </CardTitle>
-          <CardDescription>
-            Accounts are created by an admin. Ask yours if you need access.
-          </CardDescription>
+    <div className="relative flex min-h-svh flex-col items-center justify-center bg-background p-4 sm:p-6">
+      {/* Background ambient lighting */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute top-1/4 left-1/2 -z-10 h-96 w-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/10 blur-3xl" />
+      </div>
+
+      {/* Top right theme toggle */}
+      <div className="absolute top-4 right-4 sm:top-6 sm:right-6">
+        <ThemeToggle />
+      </div>
+
+      <Card className="w-full max-w-sm border-border/80 shadow-lg backdrop-blur-sm">
+        <CardHeader className="space-y-3 text-center pb-2">
+          <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-xs">
+            <LifeBuoy className="size-6" aria-hidden />
+          </div>
+          <div className="space-y-1">
+            <CardTitle className="text-xl font-bold tracking-tight">
+              Sign in to Helpdesk
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Enter your credentials to access your support workspace
+            </CardDescription>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-4">
           <Form {...form}>
             <form
               onSubmit={form.handleSubmit((values) =>
@@ -94,6 +109,7 @@ export default function Login() {
                         type="email"
                         autoComplete="email"
                         placeholder="you@example.com"
+                        className="bg-background"
                         {...field}
                       />
                     </FormControl>
@@ -111,6 +127,7 @@ export default function Login() {
                       <Input
                         type="password"
                         autoComplete="current-password"
+                        className="bg-background"
                         {...field}
                       />
                     </FormControl>
@@ -128,10 +145,10 @@ export default function Login() {
 
               <Button
                 type="submit"
-                className="w-full"
+                className="mt-1 w-full font-semibold shadow-sm"
                 disabled={loginMutation.isPending}
               >
-                {loginMutation.isPending && <Loader2 className="animate-spin" />}
+                {loginMutation.isPending && <Loader2 className="animate-spin size-4" />}
                 Sign in
               </Button>
             </form>

@@ -42,16 +42,15 @@ export default function TicketSummary({ ticketId }: { ticketId: number }) {
           type="button"
           variant="outline"
           size="sm"
+          className="border-primary/30 bg-primary/5 text-primary hover:bg-primary/15 hover:border-primary/50 transition-all font-medium"
           disabled={summarize.isPending}
           onClick={() => summarize.mutate()}
         >
           {summarize.isPending ? (
-            <Loader2 className="animate-spin" />
+            <Loader2 className="animate-spin size-4 text-primary" />
           ) : (
-            <Sparkles />
+            <Sparkles className="size-4 text-primary" />
           )}
-          {/* Once a summary is on screen the button's job changes: it replaces the
-              summary with a freshly generated one, so say so. */}
           {summary ? "Regenerate summary" : "Summarize"}
         </Button>
       </div>
@@ -63,16 +62,13 @@ export default function TicketSummary({ ticketId }: { ticketId: number }) {
         />
       )}
 
-      {/* The previous summary stays put while a regenerate is in flight (the button
-          carries the spinner), so the panel never blanks out mid-read — and it
-          survives a failed regenerate too, alongside the error. */}
       {summary && (
-        <div className="bg-muted/50 space-y-1 rounded-md p-3">
-          <h3 className="u-label">Summary</h3>
-          {/* The summary can come back as multiple lines or bullet points, so
-              preserve its newlines rather than collapsing them into one block —
-              matching how the message body and replies are rendered. */}
-          <p className="text-sm whitespace-pre-wrap">{summary}</p>
+        <div className="relative overflow-hidden rounded-xl border border-primary/20 bg-gradient-to-br from-primary/5 via-background to-muted/20 p-4 shadow-xs">
+          <div className="flex items-center gap-2 pb-2 text-primary font-semibold text-xs uppercase tracking-wider u-label">
+            <Sparkles className="size-4" />
+            <span>AI Executive Summary</span>
+          </div>
+          <p className="text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap">{summary}</p>
         </div>
       )}
     </div>

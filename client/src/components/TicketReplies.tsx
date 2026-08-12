@@ -32,9 +32,6 @@ import ErrorMessage from "@/components/ErrorMessage";
 function ReplyItem({ reply }: { reply: TicketReply }) {
   const isAgent = reply.senderType === "agent";
 
-  // When the reply carried an HTML part (customer replies from email), render it
-  // sanitized so the original formatting survives; otherwise fall back to the
-  // plain-text body. Mirrors TicketDetail's handling of the inbound message.
   const cleanHtml = useMemo(
     () => (reply.bodyHtml ? sanitizeHtml(reply.bodyHtml) : null),
     [reply.bodyHtml],
@@ -43,46 +40,41 @@ function ReplyItem({ reply }: { reply: TicketReply }) {
   return (
     <div
       className={
-        isAgent ? "space-y-1" : "bg-muted/50 space-y-1 rounded-md p-3"
+        isAgent
+          ? "space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-4 shadow-2xs"
+          : "space-y-2 rounded-xl border border-border/80 bg-card p-4 shadow-2xs"
       }
     >
-      <div className="flex items-baseline justify-between gap-2">
+      <div className="flex items-center justify-between gap-2 border-b border-border/40 pb-2">
         <span className="flex items-center gap-2 text-sm font-medium">
           <Badge
             variant="outline"
             className={
               isAgent
-                ? "u-chip bg-evergreen-surface border-evergreen-border text-primary"
+                ? "u-chip bg-primary/10 border-primary/20 text-primary"
                 : "u-chip bg-muted border-border text-muted-foreground"
             }
           >
             {isAgent ? "agent" : "customer"}
           </Badge>
-          {/* Agent replies name the authoring user (falling back to "Agent" only
-              if that user was since hard-deleted). Customer replies have no
-              app-User author, so the badge alone identifies them. */}
-          {isAgent && <span>{reply.author?.name ?? "Agent"}</span>}
+          {isAgent && <span className="font-semibold text-foreground">{reply.author?.name ?? "Agent"}</span>}
         </span>
         <span className="text-muted-foreground u-data text-xs">
           {new Date(reply.createdAt).toLocaleString()}
         </span>
       </div>
       {cleanHtml !== null ? (
-        // Sanitized via DOMPurify above — safe to inject as markup.
         <div
-          className="text-sm [&_a]:underline"
+          className="prose dark:prose-invert max-w-none text-sm leading-relaxed [&_a]:text-primary [&_a]:underline"
           dangerouslySetInnerHTML={{ __html: cleanHtml }}
         />
       ) : (
-        <p className="text-sm whitespace-pre-wrap">{reply.body}</p>
+        <p className="text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap">{reply.body}</p>
       )}
     </div>
   );
 }
 
-// The reply thread and compose form for a ticket, rendered below the inbound
-// message on the detail page. Owns its own replies query (keyed on the ticket id)
-// so it refreshes independently of the ticket detail.
 export default function TicketReplies({ ticketId }: { ticketId: number }) {
   const queryClient = useQueryClient();
 
@@ -102,16 +94,11 @@ export default function TicketReplies({ ticketId }: { ticketId: number }) {
       (await api.post<TicketReply>(`/api/tickets/${ticketId}/replies`, values))
         .data,
     onSuccess: () => {
-      // Refetch the thread so it reflects the server's ordering and author
-      // identity, then clear the compose box for the next reply.
       queryClient.invalidateQueries({ queryKey: ["ticket-replies", ticketId] });
       form.reset();
     },
   });
 
-  // Rewrites the current draft via GPT and puts the result back in the compose box.
-  // Nothing is sent to the customer — the agent still reviews and submits it — so
-  // the polished text replaces the draft in place, keeping the form dirty.
   const polishReply = useMutation({
     mutationFn: async (body: string) =>
       (
@@ -128,36 +115,31 @@ export default function TicketReplies({ ticketId }: { ticketId: number }) {
     },
   });
 
-  // The draft, watched so both actions can disable themselves when there is nothing
-  // to work with (the server would 400 on an empty body anyway). Gating the buttons
-  // on this is why an empty draft never reaches createReplySchema's "Reply cannot be
-  // empty" rule — the schema still enforces it server-side, it just isn't how the
-  // agent finds out. Whitespace-only counts as empty, matching the schema's trim().
   const draft = form.watch("body");
   const isEmpty = draft.trim() === "";
   const busy = polishReply.isPending || sendReply.isPending;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="u-label">Replies</CardTitle>
+    <Card className="border-border/80 shadow-xs overflow-hidden">
+      <CardHeader className="border-b bg-muted/10 pb-4">
+        <CardTitle className="u-label text-xs uppercase tracking-wider font-semibold text-muted-foreground">
+          Conversation Thread & Replies
+        </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-6 pt-6">
         {replies.isPending ? (
           <div className="space-y-4">
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-16 w-full rounded-xl" />
+            <Skeleton className="h-16 w-full rounded-xl" />
           </div>
         ) : replies.isError ? (
           <ErrorAlert error={replies.error} fallback="Failed to load replies." />
         ) : replies.data.length === 0 ? (
-          <p className="text-muted-foreground text-sm">No replies yet.</p>
+          <p className="text-muted-foreground text-sm font-medium">No replies yet.</p>
         ) : (
-          <div className="divide-y">
+          <div className="space-y-3">
             {replies.data.map((reply) => (
-              <div key={reply.id} className="py-3 first:pt-0 last:pb-0">
-                <ReplyItem reply={reply} />
-              </div>
+              <ReplyItem key={reply.id} reply={reply} />
             ))}
           </div>
         )}
@@ -165,7 +147,7 @@ export default function TicketReplies({ ticketId }: { ticketId: number }) {
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit((values) => sendReply.mutate(values))}
-            className="space-y-3"
+            className="space-y-3 rounded-xl border border-border/80 bg-muted/10 p-4"
             noValidate
           >
             <FormField
@@ -175,9 +157,10 @@ export default function TicketReplies({ ticketId }: { ticketId: number }) {
                 <FormItem>
                   <FormControl>
                     <Textarea
-                      placeholder="Write a reply…"
+                      placeholder="Type your response to the customer…"
                       rows={4}
                       aria-label="Reply message"
+                      className="bg-background text-sm leading-relaxed"
                       {...field}
                     />
                   </FormControl>
@@ -200,27 +183,31 @@ export default function TicketReplies({ ticketId }: { ticketId: number }) {
               />
             )}
 
-            <div className="flex justify-end gap-2">
-              {/* Polish rewrites the draft in place rather than submitting, so it
-                  must be type="button" — a bare button inside a form would submit
-                  and send the unpolished reply. */}
-              <Button
-                type="button"
-                variant="outline"
-                disabled={busy || isEmpty}
-                onClick={() => polishReply.mutate(draft)}
-              >
-                {polishReply.isPending ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <Sparkles />
-                )}
-                Polish
-              </Button>
-              <Button type="submit" disabled={busy || isEmpty}>
-                {sendReply.isPending && <Loader2 className="animate-spin" />}
-                Send reply
-              </Button>
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <span className="text-xs text-muted-foreground hidden sm:inline">
+                Polishing uses AI to clean up grammar and tone before sending.
+              </span>
+              <div className="flex items-center gap-2 ml-auto">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="border-primary/30 text-primary hover:bg-primary/10"
+                  disabled={busy || isEmpty}
+                  onClick={() => polishReply.mutate(draft)}
+                >
+                  {polishReply.isPending ? (
+                    <Loader2 className="animate-spin size-4" />
+                  ) : (
+                    <Sparkles className="size-4" />
+                  )}
+                  Polish
+                </Button>
+                <Button type="submit" size="sm" disabled={busy || isEmpty}>
+                  {sendReply.isPending && <Loader2 className="animate-spin size-4" />}
+                  Send reply
+                </Button>
+              </div>
             </div>
           </form>
         </Form>

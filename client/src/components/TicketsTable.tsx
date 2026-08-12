@@ -279,60 +279,63 @@ export default function TicketsTable() {
   // Filter controls stay visible across every query state (loading/empty/error)
   // so the current filters are always adjustable.
   const filterBar = (
-    <div className="flex flex-wrap items-center gap-2">
-      <div className="relative w-full sm:w-64">
-        <Search
-          className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
-          aria-hidden
-        />
-        <Input
-          type="search"
-          placeholder="Search tickets…"
-          aria-label="Search tickets"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-8"
-        />
+    <div className="flex flex-col gap-3 rounded-xl border border-border/80 bg-card p-3.5 shadow-xs sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-1 flex-wrap items-center gap-2.5">
+        <div className="relative w-full sm:w-72">
+          <Search
+            className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
+            aria-hidden
+          />
+          <Input
+            type="search"
+            placeholder="Search subject or sender…"
+            aria-label="Search tickets"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-background pl-9 text-sm"
+          />
+        </div>
+
+        <Select
+          value={status}
+          onValueChange={(v) => setStatus(v as TicketStatus | typeof ALL)}
+        >
+          <SelectTrigger className="w-full bg-background sm:w-40" aria-label="Filter by status">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>All statuses</SelectItem>
+            {agentTicketStatuses.map((s) => (
+              <SelectItem key={s} value={s} className="u-data text-xs">
+                {s}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={category}
+          onValueChange={(v) => setCategory(v as TicketCategory | typeof ALL)}
+        >
+          <SelectTrigger className="w-full bg-background sm:w-48" aria-label="Filter by category">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>All categories</SelectItem>
+            {ticketCategories.map((c) => (
+              <SelectItem key={c} value={c} className="u-data text-xs">
+                {formatCategory(c)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
-
-      <Select
-        value={status}
-        onValueChange={(v) => setStatus(v as TicketStatus | typeof ALL)}
-      >
-        <SelectTrigger className="w-40" aria-label="Filter by status">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL}>All statuses</SelectItem>
-          {agentTicketStatuses.map((s) => (
-            <SelectItem key={s} value={s} className="u-data text-xs">
-              {s}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select
-        value={category}
-        onValueChange={(v) => setCategory(v as TicketCategory | typeof ALL)}
-      >
-        <SelectTrigger className="w-48" aria-label="Filter by category">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL}>All categories</SelectItem>
-          {ticketCategories.map((c) => (
-            <SelectItem key={c} value={c} className="u-data text-xs">
-              {formatCategory(c)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
 
       {isFiltered && (
         <Button
           variant="ghost"
           size="sm"
+          className="text-muted-foreground hover:text-foreground self-start sm:self-auto"
           onClick={() => {
             setStatus(ALL);
             setCategory(ALL);
@@ -340,7 +343,7 @@ export default function TicketsTable() {
             setDebouncedSearch("");
           }}
         >
-          <X />
+          <X className="size-3.5" />
           Clear filters
         </Button>
       )}
@@ -350,29 +353,29 @@ export default function TicketsTable() {
   let content;
   if (tickets.isPending) {
     content = (
-      <div className="rounded-md border">
+      <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-xs">
         <Table>
           {header}
           <TableBody>
             {Array.from({ length: 5 }).map((_, i) => (
               <TableRow key={i}>
                 <TableCell>
-                  <Skeleton className="h-4 w-48" />
+                  <Skeleton className="h-4 w-48 rounded-md" />
                 </TableCell>
                 <TableCell>
-                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-4 w-40 rounded-md" />
                 </TableCell>
                 <TableCell>
                   <Skeleton className="h-5 w-16 rounded-full" />
                 </TableCell>
                 <TableCell>
-                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-4 w-28 rounded-md" />
                 </TableCell>
                 <TableCell>
-                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-4 w-28 rounded-md" />
                 </TableCell>
                 <TableCell>
-                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-24 rounded-md" />
                 </TableCell>
               </TableRow>
             ))}
@@ -387,8 +390,10 @@ export default function TicketsTable() {
   } else if (rows.length === 0) {
     const EmptyIcon = isFiltered ? SearchX : Inbox;
     content = (
-      <div className="flex flex-col items-center gap-3 rounded-md border border-dashed py-12">
-        <EmptyIcon className="text-muted-foreground size-6" aria-hidden />
+      <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/80 bg-card/50 py-16 text-center">
+        <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+          <EmptyIcon className="size-6" aria-hidden />
+        </div>
         <span className="text-muted-foreground text-sm">
           {isFiltered
             ? "No tickets match the current filters."
@@ -402,14 +407,14 @@ export default function TicketsTable() {
     const lastRow = firstRow + rows.length - 1;
     content = (
       <>
-        <div className="rounded-md border">
+        <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-xs">
           <Table>
             {header}
             <TableBody>
               {table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
+                <TableRow key={row.id} className="transition-colors hover:bg-muted/30">
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell key={cell.id} className="py-3.5">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
@@ -419,7 +424,7 @@ export default function TicketsTable() {
           </Table>
         </div>
 
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col items-center justify-between gap-3 px-1 sm:flex-row">
           <p className="text-muted-foreground u-data text-xs">
             Showing {firstRow}–{lastRow} of {total}
           </p>
@@ -430,12 +435,12 @@ export default function TicketsTable() {
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1 || tickets.isFetching}
             >
-              <ChevronLeft />
+              <ChevronLeft className="size-4" />
               Previous
             </Button>
-            <span className="text-muted-foreground u-data text-xs">
+            <div className="flex items-center rounded-lg border bg-card px-3 py-1 text-xs text-muted-foreground u-data">
               Page {page} of {pageCount}
-            </span>
+            </div>
             <Button
               variant="outline"
               size="sm"
@@ -443,7 +448,7 @@ export default function TicketsTable() {
               disabled={page >= pageCount || tickets.isFetching}
             >
               Next
-              <ChevronRight />
+              <ChevronRight className="size-4" />
             </Button>
           </div>
         </div>

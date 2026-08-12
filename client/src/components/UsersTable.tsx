@@ -98,13 +98,20 @@ export default function UsersTable() {
 
   return (
     <>
-      <div className="rounded-md border">
+      <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-xs">
         <Table>
           <UsersTableHeader />
           <TableBody>
             {users.data.map((user) => (
-              <TableRow key={user.id}>
-                <TableCell className="font-medium">{user.name}</TableCell>
+              <TableRow key={user.id} className="transition-colors hover:bg-muted/30">
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-xs">
+                      {user.name.charAt(0).toUpperCase()}
+                    </div>
+                    <span>{user.name}</span>
+                  </div>
+                </TableCell>
                 <TableCell className="text-muted-foreground u-data text-xs">
                   {user.email}
                 </TableCell>
@@ -113,7 +120,7 @@ export default function UsersTable() {
                     variant="outline"
                     className={
                       user.role === Role.admin
-                        ? "u-chip bg-evergreen-surface border-evergreen-border text-primary"
+                        ? "u-chip bg-primary/10 border-primary/20 text-primary"
                         : "u-chip bg-muted border-border text-muted-foreground"
                     }
                   >
@@ -130,18 +137,19 @@ export default function UsersTable() {
                       size="icon"
                       aria-label={`Edit ${user.name}`}
                       onClick={() => setEditingUser(user)}
+                      className="hover:bg-accent hover:text-foreground"
                     >
-                      <Pencil />
+                      <Pencil className="size-4" />
                     </Button>
-                    {/* Admins can't be deleted, so they get no delete button. */}
                     {user.role !== Role.admin && (
                       <Button
                         variant="ghost"
                         size="icon"
                         aria-label={`Delete ${user.name}`}
                         onClick={() => setDeletingUser(user)}
+                        className="hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
                       >
-                        <Trash2 className="text-destructive" />
+                        <Trash2 className="size-4 text-destructive" />
                       </Button>
                     )}
                   </div>

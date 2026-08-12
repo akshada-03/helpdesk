@@ -4,13 +4,13 @@ import UsersTable from "@/components/UsersTable";
 
 export default function Users() {
   return (
-    <div className="min-h-svh">
+    <div className="min-h-svh bg-background">
       <Navbar />
-      <main className="mx-auto max-w-4xl px-4 py-8">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold">Users</h1>
-            <p className="text-muted-foreground mt-1 text-sm">
+      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-3xl font-bold tracking-tight">Users</h1>
+            <p className="text-muted-foreground text-sm">
               Everyone with access to the helpdesk.
             </p>
           </div>

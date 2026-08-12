@@ -38,11 +38,16 @@ export default function UpdateTicket({ ticket }: { ticket: TicketDetailData }) {
   const isAdmin = session?.user.role === Role.admin;
 
   return (
-    <Card className="bg-transparent border-0 shadow-none">
-      <CardContent>
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <label className="u-label">
+    <Card className="border-border/80 shadow-xs">
+      <div className="border-b bg-muted/20 px-5 py-4">
+        <h3 className="u-label text-xs uppercase tracking-wider font-semibold text-muted-foreground">
+          Ticket Properties
+        </h3>
+      </div>
+      <CardContent className="p-5">
+        <div className="space-y-5">
+          <div className="space-y-2">
+            <label className="u-label block text-xs">
               Status
             </label>
             <TicketFieldSelect
@@ -57,8 +62,8 @@ export default function UpdateTicket({ ticket }: { ticket: TicketDetailData }) {
             />
           </div>
 
-          <div className="space-y-1.5">
-            <label className="u-label">
+          <div className="space-y-2">
+            <label className="u-label block text-xs">
               Category
             </label>
             <TicketFieldSelect
@@ -74,16 +79,20 @@ export default function UpdateTicket({ ticket }: { ticket: TicketDetailData }) {
             />
           </div>
 
-          <div className="space-y-1.5">
-            <label className="u-label">
+          <div className="space-y-2">
+            <label className="u-label block text-xs">
               Assigned to
             </label>
             {isAdmin ? (
               <AssigneeSelect ticketId={ticket.id} assignee={ticket.assignee} />
             ) : ticket.assignee ? (
-              <p className="text-sm">{ticket.assignee.name}</p>
+              <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">
+                {ticket.assignee.name}
+              </div>
             ) : (
-              <p className="text-muted-foreground text-sm">Unassigned</p>
+              <div className="rounded-md border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+                Unassigned
+              </div>
             )}
           </div>
         </div>
