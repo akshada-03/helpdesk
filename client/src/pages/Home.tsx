@@ -1,5 +1,8 @@
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
+  ArrowRight,
+  BookOpen,
   ChartPie,
   CircleDot,
   Inbox,
@@ -13,6 +16,7 @@ import { api } from "@/lib/api";
 import Navbar from "@/components/Navbar";
 import ErrorAlert from "@/components/ErrorAlert";
 import TicketsPerDayChart from "@/components/TicketsPerDayChart";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -188,6 +192,30 @@ export default function Home() {
             </CardContent>
           </Card>
         )}
+
+        {/* Knowledge Base & Support Guidelines Quick Access */}
+        <Card className="mt-6 border border-primary/20 bg-gradient-to-r from-primary/5 via-card to-card p-6 shadow-xs">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 text-primary font-semibold text-xs tracking-wider uppercase">
+                <BookOpen className="size-4" />
+                <span>Knowledge Base & Email Guidelines</span>
+              </div>
+              <h2 className="text-lg font-bold text-foreground">
+                Official Support Policies & AI Auto-Resolution Guides
+              </h2>
+              <p className="text-muted-foreground text-xs sm:text-sm max-w-xl">
+                Explore the complete knowledge base to see which inquiries trigger instant AI auto-resolutions and which require human agent review.
+              </p>
+            </div>
+            <Link to="/knowledge-base" className="shrink-0">
+              <Button className="gap-2 shadow-xs">
+                <span>View Knowledge Base</span>
+                <ArrowRight className="size-4" />
+              </Button>
+            </Link>
+          </div>
+        </Card>
 
       </main>
     </div>

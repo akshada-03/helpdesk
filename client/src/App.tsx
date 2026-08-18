@@ -7,11 +7,13 @@ import Home from "@/pages/Home";
 import Tickets from "@/pages/Tickets";
 import TicketDetail from "@/pages/TicketDetail";
 import Users from "@/pages/Users";
+import KnowledgeBase from "@/pages/KnowledgeBase";
 
 export function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/knowledge-base" element={<KnowledgeBase />} />
 
       <Route element={<ProtectedRoute />}>
         <Route path="/" element={<Home />} />

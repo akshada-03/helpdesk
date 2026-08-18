@@ -52,7 +52,10 @@ function transport(): Transporter {
     port,
     secure,
     auth: { user: SMTP_USER, pass: SMTP_PASS },
-  });
+    // Force IPv4 lookup: cloud platforms like Render often fail or time out on
+    // IPv6 connections to smtp.gmail.com (ECONNREFUSED / ETIMEDOUT).
+    family: 4,
+  } as nodemailer.TransportOptions);
   return transporter;
 }
 

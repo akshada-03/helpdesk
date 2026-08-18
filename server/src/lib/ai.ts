@@ -143,9 +143,9 @@ ${input.body}`,
 // answers with strict JSON so the worker can act on a machine-readable decision
 // rather than parsing prose.
 const AUTO_RESOLVE_SYSTEM_PROMPT = `You are a first-line customer support agent for \
-Code with Mosh. You are given the official support knowledge base and one inbound \
+Akshada Hadal Support. You are given the official support knowledge base and one inbound \
 customer ticket. Decide whether the ticket can be fully and safely resolved right \
-now using ONLY the knowledge base, and if so, write the reply to send.
+now using ONLY the knowledge base, and write the reply to send.
 
 Resolve the ticket (canResolve = true) only when ALL of these hold:
 - The knowledge base clearly and completely answers the customer's question or \
@@ -158,7 +158,7 @@ account-security concerns, or anything where your confidence is low.
 (issuing a refund, changing an account, looking up order-specific data). Explaining \
 a policy is fine; performing the action is not.
 
-When you resolve, write "reply" as a complete, professional, and genuinely \
+When you resolve (canResolve = true), write "reply" as a complete, professional, and genuinely \
 customer-friendly message:
 - Answer using only facts from the knowledge base. Never invent policies, \
 timelines, links, or steps that are not in it.
@@ -174,29 +174,34 @@ everything into one dense block of text.
 reply if they need anything else.
 - End with exactly this sign-off, on its own two lines:
 Best regards,
-Code with Mosh Support
+Akshada Hadal
 - Do not add a subject line, and do not wrap the reply in quotes or markdown.
 - Match the language of the ticket.
 
-When you do NOT resolve, set canResolve = false and set "reply" to an empty string.
+When you do NOT resolve (canResolve = false), write "reply" as a warm, reassuring acknowledgment:
+- Open with a greeting: "Hi <first name>," (or "Hi there," if unknown).
+- Acknowledge what the customer wrote or the issue they are experiencing.
+- Inform them politely that their request has been received and our team is actively investigating it and will follow up with an update shortly.
+- End with exactly this sign-off, on its own two lines:
+Best regards,
+Akshada Hadal
+- Do not guess solutions or make commitments not found in the knowledge base.
+- Match the language of the ticket.
 
 Respond with ONLY a JSON object, no code fences or commentary, in exactly this shape:
 {"canResolve": boolean, "reply": string}`;
 
-// The model's decision, validated before the worker acts on it. `reply` is only
-// meaningful when canResolve is true; the schema keeps both fields present so a
-// truncated/garbled response fails the parse rather than being half-trusted.
+// The model's decision, validated before the worker acts on it.
 const autoResolveSchema = z.object({
   canResolve: z.boolean(),
   reply: z.string(),
 });
 
-// The outcome the auto-resolve worker acts on: either a ready-to-send reply, or a
-// decision to leave the ticket for a human. Discriminated so a `resolved` result
-// always carries the reply text and an unresolved one never does.
+// The outcome the auto-resolve worker acts on: either a ready-to-send resolution, or
+// an acknowledgment reply for human handoff.
 export type AutoResolveResult =
   | { resolved: true; reply: string }
-  | { resolved: false };
+  | { resolved: false; reply: string };
 
 // Pulls the JSON object out of the model's answer. The prompt asks for bare JSON,
 // but models still occasionally wrap it in ```json fences or add a stray word, so
@@ -206,10 +211,25 @@ function extractJson(text: string): unknown {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start === -1 || end <= start) return null;
+  const slice = text.slice(start, end + 1);
   try {
-    return JSON.parse(text.slice(start, end + 1));
+    return JSON.parse(slice);
   } catch {
-    return null;
+    // When models return unescaped control characters (e.g. raw newlines inside a
+    // multiline string literal), JSON.parse throws. Sanitize those before giving up.
+    try {
+      const sanitized = slice.replace(
+        /"(?:\\.|[^"\\])*"/gs,
+        (match) =>
+          match
+            .replace(/(?<!\\)\n/g, "\\n")
+            .replace(/(?<!\\)\r/g, "\\r")
+            .replace(/(?<!\\)\t/g, "\\t"),
+      );
+      return JSON.parse(sanitized);
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -262,7 +282,7 @@ ${input.body}`,
   if (parsed.data.canResolve && reply) {
     return { resolved: true, reply };
   }
-  return { resolved: false };
+  return { resolved: false, reply };
 }
 
 // Instructions for the ticket summarizer. Agents read a summary to get back up to

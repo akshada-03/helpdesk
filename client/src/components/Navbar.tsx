@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { LifeBuoy, LogOut, Menu, Shield, Ticket, User, Users, X } from "lucide-react";
+import { BookOpen, LifeBuoy, LogOut, Menu, Shield, Ticket, User, Users, X } from "lucide-react";
 
 import { Role } from "core/constants/role.ts";
 import { signOut, useSession } from "@/lib/auth-client";
@@ -21,6 +21,7 @@ export default function Navbar() {
 
   const isTicketsActive = location.pathname.startsWith("/tickets");
   const isUsersActive = location.pathname.startsWith("/users");
+  const isKnowledgeBaseActive = location.pathname.startsWith("/knowledge-base");
   const isHomeActive = location.pathname === "/";
 
   return (
@@ -53,6 +54,17 @@ export default function Navbar() {
                 Tickets
               </Link>
             )}
+            <Link
+              to="/knowledge-base"
+              className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${
+                isKnowledgeBaseActive
+                  ? "bg-primary/10 text-primary font-semibold"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+              }`}
+            >
+              <BookOpen className="size-4" />
+              Knowledge Base
+            </Link>
             {session?.user.role === Role.admin && (
               <Link
                 to="/users"
@@ -71,33 +83,44 @@ export default function Navbar() {
 
         {/* User Actions & Controls */}
         <div className="flex items-center gap-2.5">
-          {session && (
-            <div className="hidden items-center gap-2 rounded-full border border-border/80 bg-card px-3 py-1 text-sm shadow-xs sm:flex">
-              <div className="flex size-6 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                <User className="size-3.5" />
+          {session ? (
+            <>
+              <div className="hidden items-center gap-2 rounded-full border border-border/80 bg-card px-3 py-1 text-sm shadow-xs sm:flex">
+                <div className="flex size-6 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                  <User className="size-3.5" />
+                </div>
+                <span className="font-medium text-foreground text-xs sm:text-sm">
+                  {session.user.name}
+                </span>
+                {session.user.role === Role.admin ? (
+                  <Badge variant="outline" className="u-chip bg-primary/10 border-primary/20 text-primary text-[10px]">
+                    <Shield className="mr-0.5 size-2.5" />
+                    admin
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="u-chip bg-muted border-border text-muted-foreground text-[10px]">
+                    agent
+                  </Badge>
+                )}
               </div>
-              <span className="font-medium text-foreground text-xs sm:text-sm">
-                {session.user.name}
-              </span>
-              {session.user.role === Role.admin ? (
-                <Badge variant="outline" className="u-chip bg-primary/10 border-primary/20 text-primary text-[10px]">
-                  <Shield className="mr-0.5 size-2.5" />
-                  admin
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="u-chip bg-muted border-border text-muted-foreground text-[10px]">
-                  agent
-                </Badge>
-              )}
-            </div>
+
+              <ThemeToggle />
+
+              <Button variant="outline" size="sm" onClick={handleSignOut} className="hidden sm:inline-flex">
+                <LogOut className="size-4" />
+                Sign out
+              </Button>
+            </>
+          ) : (
+            <>
+              <ThemeToggle />
+              <Link to="/login">
+                <Button size="sm" className="hidden sm:inline-flex">
+                  Sign in
+                </Button>
+              </Link>
+            </>
           )}
-
-          <ThemeToggle />
-
-          <Button variant="outline" size="sm" onClick={handleSignOut} className="hidden sm:inline-flex">
-            <LogOut className="size-4" />
-            Sign out
-          </Button>
 
           {/* Mobile menu button */}
           <Button
@@ -116,16 +139,18 @@ export default function Navbar() {
       {mobileMenuOpen && (
         <div className="border-t bg-card px-4 pt-3 pb-4 shadow-lg md:hidden animate-in slide-in-from-top-2 duration-200">
           <nav className="flex flex-col gap-1.5">
-            <Link
-              to="/"
-              onClick={() => setMobileMenuOpen(false)}
-              className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                isHomeActive ? "bg-primary/10 text-primary font-semibold" : "text-muted-foreground hover:bg-accent"
-              }`}
-            >
-              <LifeBuoy className="size-4" />
-              Dashboard
-            </Link>
+            {session && (
+              <Link
+                to="/"
+                onClick={() => setMobileMenuOpen(false)}
+                className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  isHomeActive ? "bg-primary/10 text-primary font-semibold" : "text-muted-foreground hover:bg-accent"
+                }`}
+              >
+                <LifeBuoy className="size-4" />
+                Dashboard
+              </Link>
+            )}
             {session && (
               <Link
                 to="/tickets"
@@ -138,6 +163,16 @@ export default function Navbar() {
                 Tickets
               </Link>
             )}
+            <Link
+              to="/knowledge-base"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                isKnowledgeBaseActive ? "bg-primary/10 text-primary font-semibold" : "text-muted-foreground hover:bg-accent"
+              }`}
+            >
+              <BookOpen className="size-4" />
+              Knowledge Base
+            </Link>
             {session?.user.role === Role.admin && (
               <Link
                 to="/users"
@@ -150,7 +185,7 @@ export default function Navbar() {
                 Users
               </Link>
             )}
-            {session && (
+            {session ? (
               <div className="mt-2 flex items-center justify-between border-t pt-3">
                 <div className="flex items-center gap-2">
                   <User className="size-4 text-muted-foreground" />
@@ -160,6 +195,14 @@ export default function Navbar() {
                   <LogOut className="size-3.5" />
                   Sign out
                 </Button>
+              </div>
+            ) : (
+              <div className="mt-2 border-t pt-3">
+                <Link to="/login" onClick={() => setMobileMenuOpen(false)}>
+                  <Button size="sm" className="w-full">
+                    Sign in
+                  </Button>
+                </Link>
               </div>
             )}
           </nav>

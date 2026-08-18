@@ -99,11 +99,26 @@ export async function intakeEmailTicket(
     });
 
     // A follow-up on a finished ticket means the customer isn't done — reopen it and
-    // return it to the unassigned queue so an agent picks it back up.
-    if (replied.status === "resolved" || replied.status === "closed") {
+    // return it to the unassigned queue so an agent picks it back up. Also update
+    // messageId to the customer's latest message ID so future replies thread under it.
+    const isTerminal =
+      replied.status === "resolved" || replied.status === "closed";
+    const updateData: {
+      status?: "open";
+      assigneeId?: null;
+      messageId?: string;
+    } = {};
+    if (isTerminal) {
+      updateData.status = "open";
+      updateData.assigneeId = null;
+    }
+    if (data.messageId) {
+      updateData.messageId = data.messageId;
+    }
+    if (Object.keys(updateData).length > 0) {
       await prisma.ticket.update({
         where: { id: replied.id },
-        data: { status: "open", assigneeId: null },
+        data: updateData,
       });
     }
 

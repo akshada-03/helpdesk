@@ -3,6 +3,7 @@ import { requireAuth } from "./middleware/require-auth";
 import { agentsRouter, meRouter, usersRouter } from "./routes/users";
 import { ticketsRouter } from "./routes/tickets";
 import { webhooksRouter } from "./routes/webhooks";
+import { knowledgeBaseRouter } from "./routes/knowledge-base";
 
 export const apiRouter = Router();
 
@@ -16,6 +17,9 @@ apiRouter.get("/health", (_req, res) => {
 // Inbound email webhook (SendGrid Inbound Parse) — the email provider is
 // unauthenticated, so this must stay public. It does its own optional token check.
 apiRouter.use("/webhooks", webhooksRouter);
+
+// Public knowledge base articles & support guidelines
+apiRouter.use("/knowledge-base", knowledgeBaseRouter);
 
 // --- Authenticated routes ---
 // Everything registered BELOW this line requires a valid session. Because

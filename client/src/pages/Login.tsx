@@ -1,8 +1,8 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
-import { Navigate, useNavigate } from "react-router-dom";
-import { LifeBuoy, Loader2 } from "lucide-react";
+import { Link, Navigate, useNavigate } from "react-router-dom";
+import { BookOpen, LifeBuoy, Loader2 } from "lucide-react";
 import { z } from "zod/v4";
 
 import { signIn, useSession } from "@/lib/auth-client";
@@ -153,6 +153,16 @@ export default function Login() {
               </Button>
             </form>
           </Form>
+
+          <div className="mt-6 border-t pt-4 text-center">
+            <Link
+              to="/knowledge-base"
+              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors font-medium"
+            >
+              <BookOpen className="size-3.5" />
+              <span>Looking for help? View Support Knowledge Base & Guidelines</span>
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </div>

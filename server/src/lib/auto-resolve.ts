@@ -69,40 +69,29 @@ export async function autoResolveTicketById(ticketId: number): Promise<void> {
     return;
   }
 
-  if (!result.resolved) {
-    // Couldn't answer from the knowledge base — hand off to a human, unassigned.
-    await prisma.ticket.updateMany({
-      where: { id: ticketId, status: "processing" },
-      data: { status: "open", assigneeId: null },
-    });
-    return;
-  }
+  const newStatus = result.resolved ? "resolved" : "open";
+  const newAssigneeId = result.resolved ? AI_AGENT_ID : null;
 
-  // Resolve first, scoped to `processing`, so a re-run (or an agent who grabbed the
-  // ticket in the meantime) can't cause a duplicate auto-reply: the reply is only
-  // posted when this run actually performed the resolution.
-  const resolved = await prisma.ticket.updateMany({
+  // Move out of processing to the terminal/agent-visible status.
+  const updated = await prisma.ticket.updateMany({
     where: { id: ticketId, status: "processing" },
-    data: { status: "resolved" },
+    data: { status: newStatus, assigneeId: newAssigneeId },
   });
-  if (resolved.count === 0) return;
+  if (updated.count === 0) return;
 
-  // The ticket keeps its AI agent assignment (the resolve updateMany above doesn't
-  // touch it), so a `resolved` ticket assigned to the AI agent is exactly one the
-  // AI answered — the signal the dashboard's "resolved by AI" metric keys off.
-  const reply = await prisma.ticketReply.create({
-    data: {
-      ticketId,
-      body: result.reply,
-      // The auto-reply is the support side answering the customer, so it's an
-      // agent-type reply — authored by the AI agent (the identity it ran as).
-      senderType: "agent",
-      authorId: AI_AGENT_ID,
-    },
-    select: { id: true },
-  });
+  // If a reply was generated (either resolution or acknowledgment), post it and email
+  // it to the customer.
+  if (result.reply) {
+    const reply = await prisma.ticketReply.create({
+      data: {
+        ticketId,
+        body: result.reply,
+        senderType: "agent",
+        authorId: AI_AGENT_ID,
+      },
+      select: { id: true },
+    });
 
-  // Email the AI's answer to the customer, same path as an agent reply. Never-throws
-  // and no-ops without email configured, so it can't wedge the worker.
-  await sendReplyEmailJob(reply.id);
+    await sendReplyEmailJob(reply.id);
+  }
 }
