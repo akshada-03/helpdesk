@@ -69,8 +69,10 @@ export async function autoResolveTicketById(ticketId: number): Promise<void> {
     return;
   }
 
-  const newStatus = result.resolved ? "resolved" : "open";
-  const newAssigneeId = result.resolved ? AI_AGENT_ID : null;
+  // Every ticket with an automated reply is marked resolved (assigned to AI agent).
+  // If the customer later replies by email, ticket-intake automatically reopens it as 'open'.
+  const newStatus = result.reply ? "resolved" : "open";
+  const newAssigneeId = result.reply ? AI_AGENT_ID : null;
 
   // Move out of processing to the terminal/agent-visible status.
   const updated = await prisma.ticket.updateMany({
