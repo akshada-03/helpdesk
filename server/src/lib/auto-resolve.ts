@@ -2,7 +2,7 @@ import prisma from "../db";
 import { AI_AGENT_ID } from "./ai-agent";
 import { autoResolveTicket } from "./ai";
 import { loadKnowledgeBase } from "./knowledge-base";
-import { sendReplyEmailJob } from "./queue";
+import { sendReplyEmailJob } from "./ticket-jobs";
 
 // The work performed by the `auto-resolve-ticket` queue worker (registered in
 // lib/queue): on a ticket's arrival, try to answer it from the knowledge base
