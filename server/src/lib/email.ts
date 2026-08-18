@@ -37,9 +37,9 @@ export function emailFrom(): string {
 let transporter: Transporter | null = null;
 
 // Built once and reused: nodemailer pools connections per transport, so recreating it
-// per send would drop that. Re-checks the env inline (rather than via
-// isEmailConfigured) so TypeScript narrows the vars to `string`.
-function transport(): Transporter {
+// per send would drop that. Resolves SMTP_HOST directly to an IPv4 IP address so
+// cloud platforms (like Render) never attempt unreachable IPv6 routes.
+async function getTransporter(): Promise<Transporter> {
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
     throw new Error(
       "Email is not configured — set SMTP_HOST, SMTP_USER, and SMTP_PASS in server/.env",
@@ -53,30 +53,29 @@ function transport(): Transporter {
   const secure =
     SMTP_SECURE !== undefined ? SMTP_SECURE === "true" : port === 465;
 
+  let targetHost = SMTP_HOST;
+  try {
+    const resolved = await dns.promises.lookup(SMTP_HOST, { family: 4 });
+    if (resolved?.address) {
+      targetHost = resolved.address;
+    }
+  } catch (err) {
+    console.warn("IPv4 pre-lookup failed, using hostname:", err);
+  }
+
   transporter = nodemailer.createTransport({
-    host: SMTP_HOST,
+    host: targetHost,
     port,
     secure,
     auth: { user: SMTP_USER, pass: SMTP_PASS },
-    // Force IPv4 lookup: cloud platforms like Render don't have outbound IPv6
-    // routes to Gmail's mail servers, causing ECONNREFUSED on IPv6.
+    tls: {
+      // Ensure TLS certificate matches the host domain even when connecting by IP
+      servername: SMTP_HOST,
+    },
     family: 4,
     connectionTimeout: 20_000,
     greetingTimeout: 20_000,
     socketTimeout: 30_000,
-    lookup: (
-      hostname: string,
-      _options: unknown,
-      callback: (
-        err: NodeJS.ErrnoException | null,
-        address: string,
-        family: number,
-      ) => void,
-    ) => {
-      dns.lookup(hostname, { family: 4 }, (err, address, family) => {
-        callback(err, address, family);
-      });
-    },
   } as nodemailer.TransportOptions);
   return transporter;
 }
@@ -97,7 +96,8 @@ export async function sendEmail(input: {
   inReplyTo?: string;
   references?: string;
 }): Promise<void> {
-  await transport().sendMail({
+  const t = await getTransporter();
+  await t.sendMail({
     from: emailFrom(),
     to: input.to,
     subject: input.subject,
