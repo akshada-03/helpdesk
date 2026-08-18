@@ -58,6 +58,10 @@ export const SMTP_USER = process.env.SMTP_USER;
 export const SMTP_PASS = process.env.SMTP_PASS;
 export const SMTP_FROM = process.env.SMTP_FROM;
 
+// Optional HTTP-based email API keys (Resend / SendGrid) to bypass cloud SMTP port blocking (Render free tier)
+export const RESEND_API_KEY = process.env.RESEND_API_KEY;
+export const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
+
 // --- Inbound email (IMAP polling, via imapflow) ---
 // Polls a mailbox and turns each new message into a ticket — the same intake as the
 // SendGrid webhook, for setups without a provider that can POST webhooks. Optional:

@@ -2,6 +2,8 @@ import dns from "node:dns";
 import nodemailer, { type Transporter } from "nodemailer";
 
 import {
+  RESEND_API_KEY,
+  SENDGRID_API_KEY,
   SMTP_FROM,
   SMTP_HOST,
   SMTP_PASS,
@@ -15,21 +17,20 @@ if (dns.setDefaultResultOrder) {
   dns.setDefaultResultOrder("ipv4first");
 }
 
-// Outbound email via nodemailer/SMTP. Mirrors lib/ai.ts's shape: the transport is
-// built lazily from env, and the whole feature is optional — an unconfigured server
-// runs normally and just never sends mail (callers check isEmailConfigured first, or
-// the reply-email worker no-ops). Any SMTP server works; a free Gmail App Password is
-// the zero-cost default (see server/.env.example).
+// Outbound email via HTTP API (Resend / SendGrid) or direct SMTP (nodemailer).
+// On cloud platforms (like Render free tier) that block standard SMTP ports (25/465/587),
+// setting RESEND_API_KEY or SENDGRID_API_KEY routes emails over standard HTTPS (port 443).
 
-// Configured only when we have enough to open an SMTP session: a host, a login, and a
-// password. Port/secure/from all have sensible fallbacks, so they aren't required.
+// Configured when we have an HTTP email API key OR valid SMTP credentials.
 export function isEmailConfigured(): boolean {
-  return Boolean(SMTP_HOST && SMTP_USER && SMTP_PASS);
+  return Boolean(
+    RESEND_API_KEY ||
+      SENDGRID_API_KEY ||
+      (SMTP_HOST && SMTP_USER && SMTP_PASS),
+  );
 }
 
-// The address outgoing mail is sent from. Defaults to the login mailbox, which is
-// what most providers require anyway (Gmail rewrites a mismatched From to the
-// authenticated user).
+// The address outgoing mail is sent from. Defaults to the login mailbox.
 export function emailFrom(): string {
   return SMTP_FROM || SMTP_USER || "";
 }
@@ -38,11 +39,11 @@ let transporter: Transporter | null = null;
 
 // Built once and reused: nodemailer pools connections per transport, so recreating it
 // per send would drop that. Resolves SMTP_HOST directly to an IPv4 IP address so
-// cloud platforms (like Render) never attempt unreachable IPv6 routes.
+// cloud platforms never attempt unreachable IPv6 routes.
 async function getTransporter(): Promise<Transporter> {
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
     throw new Error(
-      "Email is not configured — set SMTP_HOST, SMTP_USER, and SMTP_PASS in server/.env",
+      "Email is not configured — set RESEND_API_KEY, or SMTP_HOST, SMTP_USER, and SMTP_PASS in server/.env",
     );
   }
   if (transporter) return transporter;
@@ -83,11 +84,8 @@ async function getTransporter(): Promise<Transporter> {
 // Sends one email. Throws on failure — callers that must not fail (the request path)
 // enqueue a job and let pg-boss retry; the worker is where a throw is handled.
 //
-// `inReplyTo`/`references` thread the message in the recipient's client: we pass a
-// synthetic per-ticket id so every message we send about a ticket shares one thread
-// root. (It won't attach to the customer's original message — we don't persist that
-// Message-ID — but it keeps our own back-and-forth grouped, and most clients also
-// thread on the "Re:" subject.)
+// Prioritizes HTTP REST APIs (Resend / SendGrid) over port 443 when available,
+// which is completely immune to cloud SMTP firewall blocks.
 export async function sendEmail(input: {
   to: string;
   subject: string;
@@ -96,9 +94,72 @@ export async function sendEmail(input: {
   inReplyTo?: string;
   references?: string;
 }): Promise<void> {
+  const from = emailFrom();
+
+  // 1. Resend HTTP REST API (HTTPS port 443 — standard for Render free tier)
+  if (RESEND_API_KEY) {
+    const headers: Record<string, string> = {};
+    if (input.inReplyTo) headers["In-Reply-To"] = input.inReplyTo;
+    if (input.references) headers["References"] = input.references;
+
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: from || "onboarding@resend.dev",
+        to: [input.to],
+        subject: input.subject,
+        text: input.text,
+        html: input.html,
+        headers: Object.keys(headers).length > 0 ? headers : undefined,
+      }),
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`Resend API failed (${res.status}): ${errorText}`);
+    }
+    return;
+  }
+
+  // 2. SendGrid HTTP REST API (HTTPS port 443)
+  if (SENDGRID_API_KEY) {
+    const headers: Record<string, string> = {};
+    if (input.inReplyTo) headers["In-Reply-To"] = input.inReplyTo;
+    if (input.references) headers["References"] = input.references;
+
+    const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${SENDGRID_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        personalizations: [{ to: [{ email: input.to }] }],
+        from: { email: from || "support@example.com" },
+        subject: input.subject,
+        content: [
+          { type: "text/plain", value: input.text },
+          ...(input.html ? [{ type: "text/html", value: input.html }] : []),
+        ],
+        headers: Object.keys(headers).length > 0 ? headers : undefined,
+      }),
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`SendGrid API failed (${res.status}): ${errorText}`);
+    }
+    return;
+  }
+
+  // 3. Fallback: Direct SMTP (nodemailer)
   const t = await getTransporter();
   await t.sendMail({
-    from: emailFrom(),
+    from,
     to: input.to,
     subject: input.subject,
     text: input.text,
