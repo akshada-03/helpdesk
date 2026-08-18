@@ -1,3 +1,4 @@
+import dns from "node:dns";
 import nodemailer, { type Transporter } from "nodemailer";
 
 import {
@@ -8,6 +9,11 @@ import {
   SMTP_SECURE,
   SMTP_USER,
 } from "./env";
+
+// Ensure Node/Bun prefers IPv4 addresses globally
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder("ipv4first");
+}
 
 // Outbound email via nodemailer/SMTP. Mirrors lib/ai.ts's shape: the transport is
 // built lazily from env, and the whole feature is optional — an unconfigured server
@@ -52,9 +58,22 @@ function transport(): Transporter {
     port,
     secure,
     auth: { user: SMTP_USER, pass: SMTP_PASS },
-    // Force IPv4 lookup: cloud platforms like Render often fail or time out on
-    // IPv6 connections to smtp.gmail.com (ECONNREFUSED / ETIMEDOUT).
+    // Force IPv4 lookup: cloud platforms like Render don't have outbound IPv6
+    // routes to Gmail's mail servers, causing ECONNREFUSED on IPv6.
     family: 4,
+    lookup: (
+      hostname: string,
+      _options: unknown,
+      callback: (
+        err: NodeJS.ErrnoException | null,
+        address: string,
+        family: number,
+      ) => void,
+    ) => {
+      dns.lookup(hostname, { family: 4 }, (err, address, family) => {
+        callback(err, address, family);
+      });
+    },
   } as nodemailer.TransportOptions);
   return transporter;
 }
