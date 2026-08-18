@@ -40,8 +40,6 @@ function setEnv(overrides: Partial<AiEnv> = {}) {
     SMTP_USER: undefined,
     SMTP_PASS: undefined,
     SMTP_FROM: undefined,
-    RESEND_API_KEY: undefined,
-    SENDGRID_API_KEY: undefined,
     IMAP_HOST: undefined,
     IMAP_PORT: undefined,
     IMAP_SECURE: undefined,
