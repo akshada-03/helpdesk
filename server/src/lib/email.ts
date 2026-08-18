@@ -61,6 +61,9 @@ function transport(): Transporter {
     // Force IPv4 lookup: cloud platforms like Render don't have outbound IPv6
     // routes to Gmail's mail servers, causing ECONNREFUSED on IPv6.
     family: 4,
+    connectionTimeout: 20_000,
+    greetingTimeout: 20_000,
+    socketTimeout: 30_000,
     lookup: (
       hostname: string,
       _options: unknown,
