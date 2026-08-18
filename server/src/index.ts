@@ -19,6 +19,9 @@ import { apiRouter } from "./routes";
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
 
+// Trust Render / cloud reverse proxy headers for accurate client IP resolution
+app.set("trust proxy", true);
+
 app.use(cors({ origin: CLIENT_URL, credentials: true }));
 
 // Better Auth handles its own body parsing — mount BEFORE express.json().

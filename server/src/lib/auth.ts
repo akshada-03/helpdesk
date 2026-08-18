@@ -25,6 +25,15 @@ export const auth = betterAuth({
   // Force the Secure cookie attribute in production (served over HTTPS).
   advanced: {
     useSecureCookies: isProduction,
+    ipAddress: {
+      ipAddressHeaders: [
+        "x-forwarded-for",
+        "x-real-ip",
+        "cf-connecting-ip",
+        "render-proxy-ip",
+      ],
+      trustedProxies: ["127.0.0.1", "::1", "0.0.0.0/0", "*"],
+    },
   },
   emailAndPassword: {
     enabled: true, // email/password sign-in
