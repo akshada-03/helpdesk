@@ -83,7 +83,7 @@ You can reset your password yourself in just a few steps:
 If the email doesn't arrive within about 10 minutes, please check your spam or promotions folder — that's usually where it ends up.
 
 Best regards,
-Code with Mosh Support`),
+Akshada Hadal`),
   },
   {
     subject: "Question about your refund policy",
@@ -105,7 +105,7 @@ Happy to explain our refund policy:
 Refunds are typically processed within 5-10 business days. If you'd like to go ahead, just reply with your order receipt and the reason for your request.
 
 Best regards,
-Code with Mosh Support`),
+Akshada Hadal`),
   },
   {
     subject: "Videos won't play",
@@ -127,7 +127,7 @@ Sorry to hear the videos aren't playing. A few things usually clear this up:
 Give those a try and let us know if you're still stuck.
 
 Best regards,
-Code with Mosh Support`),
+Akshada Hadal`),
   },
   {
     subject: "Can I download the videos to watch offline?",
@@ -147,7 +147,7 @@ Thanks for asking! Here's how it works with our courses:
 So while the videos can't be saved locally, you can grab all the source code to work alongside them.
 
 Best regards,
-Code with Mosh Support`),
+Akshada Hadal`),
   },
   {
     subject: "Do you give certificates?",
@@ -164,7 +164,7 @@ Yes - a certificate is issued upon course completion, and you'll find it in your
 Do note that these are certificates of completion, not accredited degrees, so they're best used to show the topics you've covered rather than as a formal qualification.
 
 Best regards,
-Code with Mosh Support`),
+Akshada Hadal`),
   },
   {
     subject: "My coupon code isn't working",
@@ -185,7 +185,7 @@ Sorry the coupon isn't applying. This usually comes down to one of a few things:
 Also note that only one coupon can be applied per purchase. If none of those seem to fit, reply with the exact code and the course you're buying and we'll take a closer look.
 
 Best regards,
-Code with Mosh Support`),
+Akshada Hadal`),
   },
   {
     subject: "Can I move my course to a different account?",
@@ -202,7 +202,7 @@ Thanks for reaching out. Courses are tied to the account that purchased them and
 That said, if you're simply signed in with the wrong account, logging in with the email you used to purchase should bring the course straight back.
 
 Best regards,
-Code with Mosh Support`),
+Akshada Hadal`),
   },
 
   // --- Handed to a human: not in the KB, or an escalation rule fired ("open") ---
@@ -279,7 +279,7 @@ To update the email on your account, please reply with:
 Once we have those, we'll make the change for you.
 
 Best regards,
-Alex`,
+Akshada Hadal`,
     },
   },
   {
@@ -297,7 +297,7 @@ Great question. Lifetime Access means you pay once and keep access permanently, 
 It applies to the specific course you purchased, so the updates you'll receive are the ones for that course.
 
 Best regards,
-Code with Mosh Support`),
+Akshada Hadal`),
   },
 ];
 
