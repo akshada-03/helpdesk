@@ -23,6 +23,7 @@ import { polishReply, summarizeTicket } from "../lib/ai";
 import { parseId } from "../lib/parse-id";
 import { sendReplyEmailJob } from "../lib/queue";
 import { validate } from "../lib/validate";
+import { requireRole } from "../middleware/require-role";
 
 // Every `/:id` handler starts by parsing the param, so they share one message.
 const TICKET_NOT_FOUND = "Ticket not found";
@@ -271,6 +272,26 @@ ticketsRouter.patch("/:id", async (req, res) => {
   });
 
   res.json(toTicketDetail(ticket));
+});
+
+// Admin-only ticket deletion. Requires Role.admin middleware guard.
+// Deletes the ticket row (and via schema cascade, all associated replies).
+// Returns 204 No Content on success.
+ticketsRouter.delete("/:id", requireRole(Role.admin), async (req, res) => {
+  const id = parseId(req.params.id as string, res, TICKET_NOT_FOUND);
+  if (id === null) return;
+
+  const existing = await prisma.ticket.findUnique({
+    where: { id },
+    select: { id: true },
+  });
+  if (!existing) {
+    res.status(404).json({ error: TICKET_NOT_FOUND });
+    return;
+  }
+
+  await prisma.ticket.delete({ where: { id } });
+  res.status(204).end();
 });
 
 // The reply thread for a ticket, oldest first (chronological reading order).

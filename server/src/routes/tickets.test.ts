@@ -14,7 +14,7 @@ import {
 // `Prisma` import in the router is erased at runtime, so no other stubbing is
 // needed. Each method is reset between tests.
 const prismaMock = {
-  ticket: { findUnique: mock(), update: mock() },
+  ticket: { findUnique: mock(), update: mock(), delete: mock() },
   user: { findFirst: mock() },
   ticketReply: { findMany: mock(), create: mock() },
 };
@@ -674,3 +674,36 @@ describe("POST /tickets/:id/summary", () => {
     expect(res.body.error).toBeString();
   });
 });
+
+describe("DELETE /tickets/:id", () => {
+  beforeEach(() => {
+    prismaMock.ticket.findUnique.mockReset();
+    prismaMock.ticket.delete.mockReset();
+  });
+
+  test("rejects non-admin agents with 403 Forbidden", async () => {
+    const res = await send(makeApp(Role.agent), "DELETE", "/tickets/103");
+    expect(res.status).toBe(403);
+    expect(prismaMock.ticket.delete).not.toHaveBeenCalled();
+  });
+
+  test("404s when the ticket does not exist", async () => {
+    prismaMock.ticket.findUnique.mockResolvedValue(null);
+
+    const res = await send(makeApp(Role.admin), "DELETE", "/tickets/999");
+    expect(res.status).toBe(404);
+    expect(prismaMock.ticket.delete).not.toHaveBeenCalled();
+  });
+
+  test("deletes the ticket and returns 204 No Content for admin", async () => {
+    prismaMock.ticket.findUnique.mockResolvedValue({ id: 103 });
+    prismaMock.ticket.delete.mockResolvedValue({ id: 103 });
+
+    const res = await send(makeApp(Role.admin), "DELETE", "/tickets/103");
+    expect(res.status).toBe(204);
+    expect(prismaMock.ticket.delete).toHaveBeenCalledWith({
+      where: { id: 103 },
+    });
+  });
+});
+

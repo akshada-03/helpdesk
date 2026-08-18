@@ -30,7 +30,25 @@ const configuredEnv: AiEnv = {
 
 function setEnv(overrides: Partial<AiEnv> = {}) {
   const env = { ...configuredEnv, ...overrides };
-  mock.module("./env", () => env);
+  mock.module("./env", () => ({
+    CLIENT_URL: "http://localhost:3000",
+    API_BASE_URL: "http://localhost:3001",
+    WEBHOOK_SECRET: undefined,
+    SMTP_HOST: undefined,
+    SMTP_PORT: undefined,
+    SMTP_SECURE: undefined,
+    SMTP_USER: undefined,
+    SMTP_PASS: undefined,
+    SMTP_FROM: undefined,
+    IMAP_HOST: undefined,
+    IMAP_PORT: undefined,
+    IMAP_SECURE: undefined,
+    IMAP_USER: undefined,
+    IMAP_PASS: undefined,
+    IMAP_POLL_SECONDS: undefined,
+    isProduction: false,
+    ...env,
+  }));
 }
 
 setEnv();

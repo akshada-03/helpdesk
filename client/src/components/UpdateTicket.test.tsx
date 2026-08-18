@@ -59,7 +59,7 @@ describe("UpdateTicket", () => {
     mockedAxios.get.mockResolvedValue({ data: { agents: [] } } as AxiosResponse);
   });
 
-  it("renders the status, category, and (admin) assignee controls", () => {
+  it("renders the status, category, (admin) assignee controls, and Delete ticket button", () => {
     renderWithQuery(<UpdateTicket ticket={ticket} />);
 
     expect(
@@ -71,9 +71,12 @@ describe("UpdateTicket", () => {
     expect(
       screen.getByRole("combobox", { name: "Assign to agent" }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Delete ticket" }),
+    ).toBeInTheDocument();
   });
 
-  it("shows the assignee read-only (no picker) for agents", () => {
+  it("shows the assignee read-only (no picker) and hides Delete ticket button for agents", () => {
     mockRole(Role.agent);
     renderWithQuery(<UpdateTicket ticket={ticket} />);
 
@@ -81,5 +84,8 @@ describe("UpdateTicket", () => {
       screen.queryByRole("combobox", { name: "Assign to agent" }),
     ).not.toBeInTheDocument();
     expect(screen.getByText("Unassigned")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Delete ticket" }),
+    ).not.toBeInTheDocument();
   });
 });
